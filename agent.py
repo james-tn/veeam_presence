@@ -15,6 +15,23 @@ TOOL_DISPATCH = {
 }
 
 
+def _add_routing_hint(message):
+    """
+    Add routing hints for queries where Claude's priors override the prompt.
+    Returns the message with a system hint prepended if needed.
+    """
+    lower = message.lower()
+
+    # Travel/visitor queries — Claude's "I don't have travel data" prior is too strong
+    travel_words = ["travel", "traveling", "travelling", "visiting other", "between offices",
+                    "cross-office", "who went to", "who visited"]
+    if any(w in lower for w in travel_words):
+        return (f"[ROUTING: This is a cross-office travel question. You have this data. "
+                f"Call query_person with query_type='visitors' immediately.]\n\n{message}")
+
+    return message
+
+
 def run_agent(user_message, history=None):
     """
     Run one turn of the Presence agent.
@@ -30,9 +47,12 @@ def run_agent(user_message, history=None):
     client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
     history = history or []
 
+    # Add routing hints for tricky queries
+    routed_message = _add_routing_hint(user_message)
+
     # Build messages — trim to last 10 exchanges to control tokens
     messages = list(history[-20:])  # 10 pairs = 20 messages
-    messages.append({"role": "user", "content": user_message})
+    messages.append({"role": "user", "content": routed_message})
 
     # Claude API call with tools
     response = client.messages.create(
