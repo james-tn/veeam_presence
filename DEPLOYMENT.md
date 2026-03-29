@@ -213,15 +213,15 @@ az containerapp exec --name presence-agent --resource-group rg-presence -- mkdir
 5. Ask "Who's showing up the most in Prague?" → verify leaderboard
 6. Ask "Who is traveling between offices?" → verify visitor data
 
-## Step 9: Create Access Group (Pilot)
+## Step 9: Distribute to Pilot Users
 
-Starting with a small group:
+**For pilot (3-5 people):** Sideload the app directly to test users. No AD group needed.
 
-1. Azure Portal → Entra ID → Groups → New group
-2. Name: `SG-Presence-Users`
-3. Add 3-5 pilot users (provided by Presence dev team)
-4. App Setup Policy targets this group — only these users see the bot
-5. After pilot feedback, expand the group for broader rollout
+1. Teams Admin Center → Manage Apps → Upload custom app → upload the zip
+2. Assign the app to specific pilot users via App Setup Policy
+3. Pilot users find "Veeam Presence" in their Teams apps
+
+**For broader rollout (later):** Create an Azure AD security group (`SG-Presence-Users`), add members, and target the App Setup Policy to that group. This scales without touching individual users.
 
 ## Monitoring
 
