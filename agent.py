@@ -22,12 +22,25 @@ def _add_routing_hint(message):
     """
     lower = message.lower()
 
-    # Travel/visitor queries — Claude's "I don't have travel data" prior is too strong
+    # Travel/visitor queries
     travel_words = ["travel", "traveling", "travelling", "visiting other", "between offices",
                     "cross-office", "who went to", "who visited"]
     if any(w in lower for w in travel_words):
         return (f"[ROUTING: This is a cross-office travel question. You have this data. "
                 f"Call query_person with query_type='visitors' immediately.]\n\n{message}")
+
+    # Team sync queries
+    sync_words = ["team sync", "same days", "overlapping", "teams coordin", "teams coming in"]
+    if any(w in lower for w in sync_words):
+        return (f"[ROUTING: This is a team sync question. You have this data. "
+                f"Call query_person with query_type='team_sync' immediately.]\n\n{message}")
+
+    # Ghost / declining office queries
+    ghost_words = ["ghost", "declining", "dying", "going quiet", "offices quiet",
+                   "offices losing", "offices getting worse"]
+    if any(w in lower for w in ghost_words):
+        return (f"[ROUTING: This is about which offices are changing. You have this data. "
+                f"Call query_person with query_type='ghost' immediately.]\n\n{message}")
 
     return message
 

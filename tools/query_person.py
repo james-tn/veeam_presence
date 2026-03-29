@@ -61,6 +61,14 @@ def query_person(person=None, office=None, query_type=None):
     if query_type == "visitors":
         return _visitors()
 
+    # --- Team sync ---
+    if query_type == "team_sync":
+        return _team_sync(office)
+
+    # --- Ghost / which offices are quiet ---
+    if query_type == "ghost":
+        return _ghost_offices()
+
     # --- Person pattern ---
     if not person:
         return {"error": "Provide a person name/email or use query_type='who_was_in' with an office."}
@@ -252,9 +260,77 @@ def _visitors():
     return data
 
 
+def _team_sync(office=None):
+    """Team synchronization — are teams coming in on the same days?"""
+    ts_path = os.path.join(config.DATA_DIR, "team_sync.pkl")
+    if not os.path.exists(ts_path):
+        return {"error": "Team sync data not available. Run the pipeline first."}
+    with open(ts_path, "rb") as f:
+        data = pickle.load(f)
+
+    # Filter to office if specified
+    if office:
+        from tools.query_office_intel import _match_office
+        matched = _match_office(office)
+        if matched:
+            data = {k: v for k, v in data.items() if v.get("office") == matched}
+
+    # Sort: low sync first (these are the interesting ones)
+    teams = sorted(data.values(), key=lambda x: x.get("sync_score", 0))
+
+    # Plain language output
+    same_days = [t for t in teams if t["sync_score"] >= 0.4]
+    mixed = [t for t in teams if 0.2 <= t["sync_score"] < 0.4]
+    different_days = [t for t in teams if t["sync_score"] < 0.2]
+
+    result = {
+        "total_teams": len(teams),
+        "teams_on_same_days": len(same_days),
+        "teams_mixed": len(mixed),
+        "teams_on_different_days": len(different_days),
+    }
+
+    # Show the worst teams (most interesting)
+    if different_days:
+        result["teams_rarely_overlapping"] = [
+            {"team": t["team"], "office": t["office"], "manager": t["manager"],
+             "members": t["members"]}
+            for t in different_days[:10]
+        ]
+
+    # Show the best teams
+    if same_days:
+        result["teams_well_coordinated"] = [
+            {"team": t["team"], "office": t["office"], "manager": t["manager"],
+             "members": t["members"]}
+            for t in reversed(same_days[-5:])
+        ]
+
+    return result
+
+
+def _ghost_offices():
+    """Which offices have multiple declining signals?"""
+    sig_path = os.path.join(config.DATA_DIR, "signals.pkl")
+    if not os.path.exists(sig_path):
+        return {"error": "Signals data not available. Run the pipeline first."}
+    with open(sig_path, "rb") as f:
+        data = pickle.load(f)
+
+    offices = []
+    for name, sig in sorted(data.items(), key=lambda x: x[1].get("signals_active", 0), reverse=True):
+        if sig.get("signals"):
+            offices.append({
+                "office": name,
+                "things_happening": sig["signals"],
+            })
+
+    return {"offices_with_changes": offices}
+
+
 TOOL_SCHEMA = {
     "name": "query_person",
-    "description": "Get data about people: individual attendance patterns, who was in an office, trending up/down, and cross-office travel/visitors. Use query_type='visitors' for any question about travel between offices.",
+    "description": "Get data about people and teams: individual attendance, who was in an office, trending up/down, cross-office travel (query_type='visitors'), team coordination (query_type='team_sync'), and which offices have changes (query_type='ghost').",
     "input_schema": {
         "type": "object",
         "properties": {
@@ -268,7 +344,7 @@ TOOL_SCHEMA = {
             },
             "query_type": {
                 "type": "string",
-                "enum": ["pattern", "who_was_in", "trending_up", "trending_down", "visitors"],
+                "enum": ["pattern", "who_was_in", "trending_up", "trending_down", "visitors", "team_sync", "ghost"],
                 "description": "Type of query. Default: 'pattern' for person queries, 'who_was_in' for office queries.",
             },
         },

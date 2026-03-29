@@ -1,4 +1,4 @@
-"""Tier 1 Tool: query_office_intel — headcounts and names only."""
+"""Tier 1 Tool: query_office_intel — headcounts, names, and office health."""
 
 import os, sys, pickle
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -17,6 +17,12 @@ def load_cache():
         _cache["personality"] = pickle.load(f)
     with open(os.path.join(data_dir, "anchors.pkl"), "rb") as f:
         _cache["anchors"] = pickle.load(f)
+    # Phase 2 data
+    for name in ("team_sync", "signals", "chi"):
+        path = os.path.join(data_dir, f"{name}.pkl")
+        if os.path.exists(path):
+            with open(path, "rb") as f:
+                _cache[name] = pickle.load(f)
 
 
 def _ensure_cache():
@@ -64,6 +70,11 @@ def query_office_intel(office=None):
     # Weekly trend — just people counts
     weekly = [w["headcount"] for w in bl.get("weekly_trend", [])[-4:]]
 
+    # Typical by day
+    typical_by_day = {}
+    for dow, d in bl.get("dow_baselines", {}).items():
+        typical_by_day[DOW_NAMES.get(int(dow), str(dow))] = round(pool * d.get("rate", 0))
+
     # Top people — names and days only
     top = []
     for entry in an.get("leaderboard", [])[:10]:
@@ -73,21 +84,47 @@ def query_office_intel(office=None):
             "days": entry.get("days", ""),
         })
 
-    return {
+    result = {
         "office": matched,
         "region": config.OFFICES.get(matched, {}).get("region", "Unknown"),
         "data_through": latest.get("date", "unknown"),
         "day": DOW_NAMES.get(latest_dow, ""),
         "people_in": latest_hc,
         "typical": typical,
+        "typical_by_day": typical_by_day,
         "weekly_headcounts": weekly,
         "top_people_this_week": top,
     }
+
+    # --- Phase 2: Ghost signals (plain language) ---
+    sig = _cache.get("signals", {}).get(matched, {})
+    if sig.get("signals"):
+        result["things_to_note"] = sig["signals"]
+
+    # --- Phase 2: CHI score ---
+    chi = _cache.get("chi", {}).get(matched, {})
+    if chi:
+        result["health_score"] = chi["chi"]
+
+    # --- Phase 2: Team sync summary for this office ---
+    team_sync = _cache.get("team_sync", {})
+    office_teams = {k: v for k, v in team_sync.items() if v.get("office") == matched}
+    if office_teams:
+        scores = [t["sync_score"] for t in office_teams.values()]
+        low_sync = [t for t in office_teams.values() if t["sync_score"] < 0.2]
+        result["teams"] = {
+            "total_teams": len(office_teams),
+            "teams_coming_in_same_days": len(office_teams) - len(low_sync),
+            "teams_on_different_days": len(low_sync),
+        }
+
+    return result
 
 
 def _global_summary():
     _ensure_cache()
     baselines = _cache["baselines"]
+    chi_data = _cache.get("chi", {})
 
     offices = []
     for name, bl in baselines.items():
@@ -98,11 +135,17 @@ def _global_summary():
         dow_bl = bl.get("dow_baselines", {}).get(latest_dow, {})
         typical = round(pool * dow_bl.get("rate", 0)) if dow_bl else 0
 
-        offices.append({
+        entry = {
             "name": name,
             "people_in": hc,
             "typical": typical,
-        })
+        }
+
+        chi = chi_data.get(name, {})
+        if chi:
+            entry["health_score"] = chi["chi"]
+
+        offices.append(entry)
 
     offices.sort(key=lambda x: x["people_in"], reverse=True)
 
@@ -113,15 +156,23 @@ def _global_summary():
             latest_date = d
             break
 
-    return {
+    # Ghost flags
+    signals = _cache.get("signals", {})
+    ghost_offices = [name for name, s in signals.items() if s.get("ghost_flag")]
+
+    result = {
         "data_through": latest_date,
         "offices": offices,
     }
+    if ghost_offices:
+        result["offices_to_watch"] = ghost_offices
+
+    return result
 
 
 TOOL_SCHEMA = {
     "name": "query_office_intel",
-    "description": "Get office headcounts. No office = all offices sorted by size. With office name = that office plus top people.",
+    "description": "Get office headcounts, top people, health scores, and team info. No office = all offices. With office name = that office's full detail.",
     "input_schema": {
         "type": "object",
         "properties": {
