@@ -153,12 +153,21 @@ def _person_pattern(df, email):
     from pipeline.holidays_cal import get_workdays, get_holiday_name
     start = weekdays["date"].min()
     end = weekdays["date"].max()
-    workdays_list = get_workdays(office, start, end)
+    workdays_list = get_workdays(office, start, end)  # Business days minus holidays
     dates_present = set(weekdays["date"].dt.date)
-    dates_absent_raw = [d.date() for d in workdays_list if d.date() not in dates_present]
-    # Separate holidays from actual absences
-    holidays_missed = [(str(d), get_holiday_name(office, d)) for d in dates_absent_raw if get_holiday_name(office, d)]
-    dates_absent = sorted([d for d in dates_absent_raw if not get_holiday_name(office, d)])
+
+    # Find which holidays were excluded (difference between all business days and workdays)
+    all_business = pd.bdate_range(start=start, end=end)
+    workday_dates = set(d.date() for d in workdays_list)
+    holidays_excluded = []
+    for d in all_business:
+        if d.date() not in workday_dates:
+            name = get_holiday_name(office, d.date())
+            if name:
+                holidays_excluded.append(f"{name} ({d.date()})")
+
+    # Absent days = workdays where person was not present (holidays already removed)
+    dates_absent = sorted([d.date() for d in workdays_list if d.date() not in dates_present])
 
     return {
         "name": name,
@@ -173,7 +182,7 @@ def _person_pattern(df, email):
         "last_4_weeks": [int(r["days"]) for _, r in weeks.tail(4).iterrows()],
         "total_days_in": len(dates_present),
         "total_workdays": len(workdays_list),
-        "holidays_excluded": [f"{name} ({date})" for date, name in holidays_missed],
+        "holidays_excluded": holidays_excluded,
         "days_not_in": [str(d) for d in dates_absent],
     }
 
