@@ -1,0 +1,34 @@
+# Discovery scripts (contain credentials)
+data_discovery*.ps1
+check_freshness.ps1
+
+# Discovery output
+discovery_out*.txt
+freshness_out.txt
+*_out.txt
+
+# Claude Code local config
+.claude/
+
+# Python
+__pycache__/
+*.pyc
+*.pkl
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Environment / secrets
+.env
+*.env
+secrets/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
