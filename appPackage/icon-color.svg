@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <!-- Background circle -->
+  <circle cx="96" cy="96" r="90" fill="#005f4b"/>
+
+  <!-- Building silhouette -->
+  <rect x="52" y="70" width="40" height="62" rx="3" fill="white" opacity="0.95"/>
+  <rect x="100" y="50" width="40" height="82" rx="3" fill="white" opacity="0.95"/>
+
+  <!-- Window dots (presence indicators) -->
+  <circle cx="64" cy="84" r="4" fill="#00d68f"/>
+  <circle cx="80" cy="84" r="4" fill="#00d68f"/>
+  <circle cx="64" cy="100" r="4" fill="#00d68f"/>
+  <circle cx="80" cy="100" r="4" fill="white" opacity="0.3"/>
+  <circle cx="64" cy="116" r="4" fill="white" opacity="0.3"/>
+  <circle cx="80" cy="116" r="4" fill="#00d68f"/>
+
+  <circle cx="112" cy="64" r="4" fill="#00d68f"/>
+  <circle cx="128" cy="64" r="4" fill="#00d68f"/>
+  <circle cx="112" cy="80" r="4" fill="white" opacity="0.3"/>
+  <circle cx="128" cy="80" r="4" fill="#00d68f"/>
+  <circle cx="112" cy="96" r="4" fill="#00d68f"/>
+  <circle cx="128" cy="96" r="4" fill="#00d68f"/>
+  <circle cx="112" cy="112" r="4" fill="#00d68f"/>
+  <circle cx="128" cy="112" r="4" fill="white" opacity="0.3"/>
+
+  <!-- Pulse arc (intelligence/monitoring) -->
+  <path d="M 42 140 Q 96 125 150 140" stroke="#00d68f" stroke-width="3" fill="none" opacity="0.8"/>
+  <path d="M 35 150 Q 96 132 157 150" stroke="#00d68f" stroke-width="2" fill="none" opacity="0.5"/>
+</svg>

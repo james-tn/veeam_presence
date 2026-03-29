@@ -16,8 +16,18 @@ def briefing_card(data):
     total = data.get("total_people_in", sum(o["people_in"] for o in offices))
 
     body = [
-        {"type": "TextBlock", "text": "Veeam Presence", "weight": "Bolder", "size": "Medium", "color": "Accent"},
-        {"type": "TextBlock", "text": f"{total} people across {len(offices)} offices", "size": "Small", "isSubtle": True, "spacing": "None"},
+        # Branded header
+        {"type": "Container", "style": "Accent", "bleed": True, "items": [
+            {"type": "ColumnSet", "columns": [
+                {"type": "Column", "width": "stretch", "items": [
+                    {"type": "TextBlock", "text": "Veeam Presence", "weight": "Bolder", "size": "Medium", "color": "Light"},
+                    {"type": "TextBlock", "text": f"Data through {date}", "size": "Small", "color": "Light", "spacing": "None"},
+                ]},
+                {"type": "Column", "width": "auto", "verticalContentAlignment": "Center", "items": [
+                    {"type": "TextBlock", "text": f"**{total}**", "size": "ExtraLarge", "color": "Light"},
+                ]},
+            ]},
+        ]},
         # Column headers
         {"type": "ColumnSet", "spacing": "Medium", "columns": [
             _col("stretch", "Office", subtle=True),
@@ -85,19 +95,21 @@ def office_detail_card(data):
     if weekly:
         body.append({"type": "TextBlock", "text": f"Recent weeks: {' → '.join(str(w) for w in weekly)}", "size": "Small", "isSubtle": True, "spacing": "Small"})
 
-    # One notable signal (if any)
+    # One notable signal (if any) — styled container
     notes = data.get("things_to_note", [])
     if notes:
-        body.append({"type": "Container", "style": "Attention", "items": [
-            {"type": "TextBlock", "text": notes[0], "size": "Small", "wrap": True},
-        ], "spacing": "Small"})
+        body.append({"type": "Container", "style": "Attention", "spacing": "Small", "items": [
+            {"type": "TextBlock", "text": "Notable", "weight": "Bolder", "size": "Small"},
+            {"type": "TextBlock", "text": notes[0], "size": "Small", "wrap": True, "spacing": "None"},
+        ]})
 
-    # Top people (limit to 4)
+    # Top people in emphasis container
     top = data.get("top_people_this_week", [])
     if top:
-        body.append({"type": "TextBlock", "text": "Top people this week", "weight": "Bolder", "size": "Small", "spacing": "Medium"})
+        top_items = [{"type": "TextBlock", "text": "Top people this week", "weight": "Bolder", "size": "Small"}]
         for p in top[:4]:
-            body.append({"type": "TextBlock", "text": f"**{p['name']}** ({p.get('role', '')}) — {p['days']}", "size": "Small", "spacing": "None", "wrap": True})
+            top_items.append({"type": "TextBlock", "text": f"**{p['name']}** ({p.get('role', '')}) — {p['days']}", "size": "Small", "spacing": "None", "wrap": True})
+        body.append({"type": "Container", "style": "Emphasis", "spacing": "Medium", "items": top_items})
 
     body.append(_freshness(date))
 
@@ -113,9 +125,17 @@ def leaderboard_card(data):
     entries = data.get("entries", data.get("top_people_this_week", []))
     office = data.get("office", "")
 
+    appeared = data.get("total_appeared_this_week", "")
+    subtitle = f"{appeared} people appeared this week" if appeared else ""
+
     body = [
-        {"type": "TextBlock", "text": f"Leaderboard — {office}" if office else "Leaderboard", "weight": "Bolder", "size": "Medium", "color": "Accent"},
+        {"type": "Container", "style": "Accent", "bleed": True, "items": [
+            {"type": "TextBlock", "text": f"Leaderboard — {office}" if office else "Leaderboard", "weight": "Bolder", "size": "Medium", "color": "Light"},
+            {"type": "TextBlock", "text": subtitle, "size": "Small", "color": "Light", "spacing": "None"} if subtitle else None,
+        ]},
     ]
+    # Remove None entries
+    body[0]["items"] = [i for i in body[0]["items"] if i is not None]
 
     for i, entry in enumerate(entries[:10], 1):
         name = entry.get("name", "")
@@ -146,14 +166,24 @@ def person_card(data):
     total_wd = data.get("total_workdays", "")
 
     body = [
-        {"type": "TextBlock", "text": name, "weight": "Bolder", "size": "Large", "color": "Accent"},
-        {"type": "TextBlock", "text": f"{title} · {office}" if title else office, "size": "Small", "isSubtle": True, "spacing": "None", "wrap": True},
-        {"type": "FactSet", "spacing": "Medium", "facts": [
-            {"title": "Days/week", "value": str(data.get("days_per_week", ""))},
-            {"title": "Arrives", "value": data.get("usual_arrival", "N/A")},
-            {"title": "Leaves", "value": data.get("usual_departure", "N/A")},
-            {"title": "Avg stay", "value": f"{data.get('avg_dwell_hours', 0)}h"},
-            {"title": "YTD", "value": f"{total_in} of {total_wd} workdays" if total_in else ""},
+        {"type": "Container", "style": "Accent", "bleed": True, "items": [
+            {"type": "TextBlock", "text": name, "weight": "Bolder", "size": "Large", "color": "Light"},
+            {"type": "TextBlock", "text": f"{title} · {office}" if title else office, "size": "Small", "color": "Light", "spacing": "None", "wrap": True},
+        ]},
+        {"type": "ColumnSet", "spacing": "Medium", "columns": [
+            {"type": "Column", "width": "stretch", "items": [
+                {"type": "FactSet", "facts": [
+                    {"title": "Days/week", "value": str(data.get("days_per_week", ""))},
+                    {"title": "Arrives", "value": data.get("usual_arrival", "N/A")},
+                    {"title": "Leaves", "value": data.get("usual_departure", "N/A")},
+                ]},
+            ]},
+            {"type": "Column", "width": "stretch", "items": [
+                {"type": "FactSet", "facts": [
+                    {"title": "Avg stay", "value": f"{data.get('avg_dwell_hours', 0)}h"},
+                    {"title": "YTD", "value": f"{total_in} of {total_wd}" if total_in else "—"},
+                ]},
+            ]},
         ]},
     ]
 
