@@ -33,12 +33,6 @@ def compute_mixing(enriched_df):
         max_streams = odf["stream"].nunique()
         avg_streams = round(daily_streams.mean(), 1) if len(daily_streams) > 0 else 0
 
-        # Which streams overlap most
-        stream_presence = odf.groupby("stream").agg(
-            people=("email", "nunique"),
-            days_with_2plus=("date", lambda x: (odf.loc[x.index].groupby("date")["email"].transform("count") >= 2).any()),
-        ).reset_index()
-
         results[office_name] = {
             "streams_present": max_streams,
             "avg_streams_per_day": avg_streams,

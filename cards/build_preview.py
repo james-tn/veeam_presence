@@ -55,7 +55,7 @@ html = f"""<!DOCTYPE html>
 </head>
 <body>
     <h1>Veeam Presence</h1>
-    <p class="subtitle">Adaptive Card Preview — 10 templates as they appear in Microsoft Teams</p>
+    <p class="subtitle">Adaptive Card Preview — 11 templates as they appear in Microsoft Teams</p>
     <div id="cards"></div>
     <script>
     const allCards = [

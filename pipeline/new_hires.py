@@ -38,7 +38,7 @@ def compute_new_hire_integration(enriched_df):
     for email, pdf in recent_hires.groupby("email"):
         name = pdf["preferred_name"].iloc[0] if pd.notna(pdf["preferred_name"].iloc[0]) else email
         office = pdf["office"].mode().iloc[0] if len(pdf["office"].mode()) > 0 else "Unknown"
-        role = pdf["stream"].iloc[0] if pd.notna(pdf.get("stream", pd.Series()).iloc[0] if len(pdf) > 0 else None) else "Unknown"
+        role = pdf["stream"].iloc[0] if "stream" in pdf.columns and pd.notna(pdf["stream"].iloc[0]) else "Unknown"
         hire_date = pdf["hire_date"].iloc[0]
 
         # Weekly attendance by tenure week

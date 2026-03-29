@@ -85,6 +85,8 @@ def query_office_intel(office=None):
             "days": entry.get("days", ""),
         })
 
+    pr = _cache.get("personality", {}).get(matched, {})
+
     result = {
         "office": matched,
         "region": config.OFFICES.get(matched, {}).get("region", "Unknown"),
@@ -92,6 +94,7 @@ def query_office_intel(office=None):
         "day": DOW_NAMES.get(latest_dow, ""),
         "people_in": latest_hc,
         "typical": typical,
+        "peak_day": pr.get("peak_day", ""),
         "typical_by_day": typical_by_day,
         "weekly_headcounts": weekly,
         "top_people_this_week": top,

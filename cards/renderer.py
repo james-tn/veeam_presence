@@ -86,7 +86,7 @@ def _generic_card(data):
     card = {
         "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
         "type": "AdaptiveCard",
-        "version": "1.4",
+        "version": "1.5",
         "body": body,
     }
     if actions:

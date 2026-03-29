@@ -54,7 +54,13 @@ def get_holiday_name(office_name, check_date):
 def get_workdays(office_name, start_date, end_date):
     """Get business days excluding public holidays for the office's country."""
     all_business = pd.bdate_range(start=start_date, end=end_date)
-    hols = get_holidays_for_office(office_name, start_date.year if hasattr(start_date, 'year') else pd.Timestamp(start_date).year)
+
+    # Build holiday set covering all years in the range
+    start_year = start_date.year if hasattr(start_date, 'year') else pd.Timestamp(start_date).year
+    end_year = end_date.year if hasattr(end_date, 'year') else pd.Timestamp(end_date).year
+    hols = {}
+    for yr in range(start_year, end_year + 1):
+        hols.update(get_holidays_for_office(office_name, yr))
 
     workdays = [d for d in all_business if d.date() not in hols]
     return workdays

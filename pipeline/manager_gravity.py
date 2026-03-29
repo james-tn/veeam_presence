@@ -31,17 +31,12 @@ def compute_manager_gravity(enriched_df):
         if len(team_emails) < 3:
             continue  # Need enough team members
 
-        # Find the manager's own email (if they appear in the data)
-        manager_email = None
-        for email in team_emails:
-            person_data = wdf[wdf["email"] == email]
-            if len(person_data) > 0 and person_data.iloc[0].get("ismanager") == "1":
-                manager_email = email
-                break
-
-        if not manager_email:
-            # Manager not found in attendance data — can't compute gravity
-            continue
+        # Find the manager's own email by matching preferred_name to manager_name
+        # The manager's own records are in a DIFFERENT group (under their manager)
+        manager_matches = wdf[wdf["preferred_name"].fillna("").str.lower() == manager_name.lower()]
+        if len(manager_matches) == 0:
+            continue  # Manager not found in attendance data
+        manager_email = manager_matches["email"].iloc[0]
 
         # Days the manager was in
         manager_days = set(wdf[wdf["email"] == manager_email]["date"].unique())

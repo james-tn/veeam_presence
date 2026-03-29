@@ -76,14 +76,8 @@ def compute_baselines(enriched_df):
                 continue
 
             rates = dow_days["headcount"] / active_pool
-            mean_rate = rates.mean()
-
-            # Holiday heuristic: exclude days below 20% of mean
-            non_holiday = rates[rates >= mean_rate * config.HOLIDAY_THRESHOLD]
-            if len(non_holiday) > 0:
-                clean_mean = non_holiday.mean()
-            else:
-                clean_mean = mean_rate
+            # Holidays already excluded upstream by holidays_cal.is_holiday()
+            clean_mean = rates.mean()
 
             dow_baselines[dow] = {
                 "rate": round(clean_mean, 4),
