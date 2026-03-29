@@ -100,5 +100,33 @@ SENIORITY_BANDS = {
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Office → country mapping for holiday calendars
+# Uses ISO 3166-1 alpha-2 codes matching the `holidays` package
+# ---------------------------------------------------------------------------
+OFFICE_COUNTRY = {
+    "Bucharest (AFI)":  "RO",
+    "Atlanta":          "US",
+    "Prague Rustonka":  "CZ",
+    "Seattle":          "US",
+    "Berlin":           "DE",
+    "Columbus":         "US",
+    "Kuala Lumpur":     "MY",
+    "Lisbon":           "PT",
+    "Singapore":        "SG",
+    "Paris":            "FR",
+    "Yerevan":          "AM",
+    "Sydney":           "AU",
+    "Phoenix":          "US",
+    "Mumbai":           "IN",
+    "Baar":             "CH",
+    "Buenos Aires":     "AR",
+    "Shanghai":         "CN",
+    "Mexico":           "MX",
+}
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")

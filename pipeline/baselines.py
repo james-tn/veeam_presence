@@ -29,11 +29,25 @@ def compute_baselines(enriched_df):
     # Weekdays only (Mon=0 to Fri=4)
     bdf = bdf[bdf["dow"] <= 4]
 
+    # Exclude known holidays per office (loaded lazily)
+    try:
+        from pipeline.holidays_cal import is_holiday
+        _has_holidays = True
+    except ImportError:
+        _has_holidays = False
+
     results = {}
 
     for office_name, odf in bdf.groupby("office"):
         if office_name is None or str(office_name).strip() == "":
             continue
+
+        # Exclude holidays for this office's country
+        if _has_holidays:
+            holiday_mask = odf["date"].apply(lambda d: is_holiday(office_name, d))
+            excluded = holiday_mask.sum()
+            if excluded > 0:
+                odf = odf[~holiday_mask]
 
         office_result = {
             "name": office_name,

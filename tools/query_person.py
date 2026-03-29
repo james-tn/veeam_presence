@@ -149,10 +149,16 @@ def _person_pattern(df, email):
     avg_arrival = round(valid_dwell["arrival_hour"].mean(), 1) if len(valid_dwell) > 0 and "arrival_hour" in valid_dwell.columns else 0
     avg_departure = round(valid_dwell["departure_hour"].mean(), 1) if len(valid_dwell) > 0 and "departure_hour" in valid_dwell.columns else 0
 
-    # Compute specific dates present and absent
-    all_dates = pd.date_range(start=weekdays["date"].min(), end=weekdays["date"].max(), freq="B")  # Business days
+    # Compute specific dates present and absent (excluding holidays)
+    from pipeline.holidays_cal import get_workdays, get_holiday_name
+    start = weekdays["date"].min()
+    end = weekdays["date"].max()
+    workdays_list = get_workdays(office, start, end)
     dates_present = set(weekdays["date"].dt.date)
-    dates_absent = sorted([d.date() for d in all_dates if d.date() not in dates_present])
+    dates_absent_raw = [d.date() for d in workdays_list if d.date() not in dates_present]
+    # Separate holidays from actual absences
+    holidays_missed = [(str(d), get_holiday_name(office, d)) for d in dates_absent_raw if get_holiday_name(office, d)]
+    dates_absent = sorted([d for d in dates_absent_raw if not get_holiday_name(office, d)])
 
     return {
         "name": name,
@@ -166,7 +172,8 @@ def _person_pattern(df, email):
         "days_they_come_in": dow_pattern,
         "last_4_weeks": [int(r["days"]) for _, r in weeks.tail(4).iterrows()],
         "total_days_in": len(dates_present),
-        "total_workdays": len(all_dates),
+        "total_workdays": len(workdays_list),
+        "holidays_excluded": len(holidays_missed),
         "days_not_in": [str(d) for d in dates_absent],
     }
 
