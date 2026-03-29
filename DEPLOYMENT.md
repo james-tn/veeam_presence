@@ -46,19 +46,16 @@ az keyvault secret set --vault-name kv-presence --name BOT-APP-ID --value '<app-
 az keyvault secret set --vault-name kv-presence --name BOT-APP-PASSWORD --value '<app-password>'
 ```
 
-## Step 2: Create Microsoft Entra App Registrations
+## Step 2: Create Microsoft Entra App Registration
 
-**Agent Service App:**
-1. Azure Portal → Entra ID → App registrations → New
-2. Name: `Presence Agent Service`
-3. Single tenant
-4. Note the Application (client) ID
+One registration needed — for the bot/gateway:
 
-**Gateway/Bot App:**
-1. New registration → `Presence Gateway`
-2. Single tenant
-3. Generate client secret → save as BOT_APP_PASSWORD
-4. Note Application ID → save as BOT_APP_ID
+1. Azure Portal → Entra ID → App registrations → New registration
+2. Name: `Veeam Presence Bot`
+3. Supported account types: Single tenant
+4. Generate a client secret → save as `BOT_APP_PASSWORD`
+5. Note the Application (client) ID → save as `BOT_APP_ID`
+6. Store both in Key Vault (Step 1)
 
 ## Step 3: Build and Push Container Images
 
@@ -169,7 +166,13 @@ az containerapp env storage set \
   --access-mode ReadWrite
 ```
 
-Then add `--volume presence-data=presence-data:/app/data` to both the agent and pipeline job create commands.
+Then add this flag to BOTH the `az containerapp create` (agent, Step 4) and `az containerapp job create` (pipeline, above) commands:
+
+```
+  --volume presence-data=azurefile-presence-data:/app/data
+```
+
+Without this, the pipeline writes data that the agent can't see.
 
 ### Option B: Manual Refresh (Pilot Only)
 

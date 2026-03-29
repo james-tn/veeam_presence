@@ -2,16 +2,18 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install dependencies (pipeline needs pandas, holidays, requests — no anthropic needed)
-COPY requirements.txt .
-RUN pip install --no-cache-dir pandas numpy holidays requests
+# Pipeline dependencies (no anthropic needed)
+COPY requirements.pipeline.txt .
+RUN pip install --no-cache-dir -r requirements.pipeline.txt
 
 # Copy pipeline code
 COPY config.py .
 COPY pipeline/ pipeline/
 
-# Create data directory
+# Create data directory (mount shared volume here)
 RUN mkdir -p data
 
-# Pipeline writes output to /app/data/ — mount Azure Blob or shared volume
+# Ensure bare imports in pipeline/ resolve correctly
+ENV PYTHONPATH="/app/pipeline:/app"
+
 CMD ["python", "pipeline/run_analytics.py"]

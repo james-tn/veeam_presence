@@ -1,0 +1,4 @@
+# Gateway dependencies
+botbuilder-core>=4.16.0
+botbuilder-integration-aiohttp>=4.16.0
+aiohttp>=3.9.0

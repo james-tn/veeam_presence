@@ -14,6 +14,9 @@ TOOL_DISPATCH = {
     "query_person": query_person,
 }
 
+# Singleton client — reuse across requests
+_client = None
+
 
 def _add_routing_hint(message):
     """
@@ -94,7 +97,10 @@ def run_agent(user_message, history=None):
         (response_text, updated_history)
         response_text is either plain text or a JSON string (card response)
     """
-    client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+    global _client
+    if _client is None:
+        _client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+    client = _client
     history = history or []
 
     # Add routing hints for tricky queries

@@ -5,9 +5,11 @@ import os
 # ---------------------------------------------------------------------------
 # Credentials (set via environment variables — never hardcode in committed files)
 # ---------------------------------------------------------------------------
-DATABRICKS_HOST = os.environ.get("DATABRICKS_HOST", "adb-1715711735713564.4.azuredatabricks.net")
+# Local dev: set via run_pipeline.ps1 / run_harness.ps1
+# Production: set via Azure Key Vault → container env vars
+DATABRICKS_HOST = os.environ.get("DATABRICKS_HOST", "")
 DATABRICKS_TOKEN = os.environ.get("DATABRICKS_TOKEN", "")
-DATABRICKS_HTTP_PATH = os.environ.get("DATABRICKS_HTTP_PATH", "/sql/1.0/warehouses/be160f1edb836d88")
+DATABRICKS_HTTP_PATH = os.environ.get("DATABRICKS_HTTP_PATH", "")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-20250514")
 

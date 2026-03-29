@@ -1,0 +1,20 @@
+# Credentials and test files
+data/
+output/
+*.ps1
+*.pkl
+*.json
+test_*.py
+test_*.ps1
+dbx_test.txt
+.claude/
+.git/
+__pycache__/
+*.pyc
+
+# Discovery and validation scripts
+data_discovery*.ps1
+check_freshness.ps1
+validation_queries.ps1
+test_proxy.*
+pipeline_run.txt
