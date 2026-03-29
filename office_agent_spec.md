@@ -31,7 +31,8 @@ Silence means normal. Cards appear only when there's something worth saying.
 
 **Key properties:**
 - **2.3M events**, 4,995 unique people, 18 offices
-- **Event-level grain** — multiple events per person per day (1-30+). Enables arrival time, departure proxy, dwell time, and intensity analysis.
+- **Event-level grain** — multiple events per person per day (1-30+). Enables arrival time, departure proxy, and dwell time analysis. Note: raw event counts per person-day reflect O365 network burst behavior, not engagement intensity — do not use as a proxy for engagement.
+- **Dwell time validated:** Last O365 event of day is a reliable departure proxy. Distribution shows natural taper from 3-7pm with no pipeline cutoff. Per-office median dwell ranges from 4.6h (Paris) to 6.3h (Atlanta/Seattle).
 - **Two sources:** O365 (76%) = in-office network activity; Verkada (24%) = physical badge readers. Not all offices have both.
 - **Pre-filtered:** Validated to contain zero overnight events and zero work-from-home leakage.
 - **Date range:** Dec 2024 — present (16+ months). Refreshed daily with ~1-2 day processing lag.
@@ -64,13 +65,15 @@ Silence means normal. Cards appear only when there's something worth saying.
 
 **Table:** `dev_catalog.revenue_intelligence.workday_enhanced`
 
-6,726 employees, 40 columns. **Join rate to occupancy: 80%** (3,988 of 4,995 matched by email). Key fields:
+6,726 employees, 40 columns. **Join rate to occupancy: 80%** (3,988 of 4,995 matched by email). The unmatched 20% (1,007 people) are almost entirely one-time badge-ins — all @veeam.com, all with exactly 1 event. Regular office attendees match at ~95%+. Not a data quality concern.
+
+Key fields:
 
 | Field | What it gives us |
 |-------|-----------------|
 | `job_family` / `job_family_group` / `stream` | Role-aware baselines (Inside Sales vs. Field Sales vs. R&D vs. Support) |
-| `management_level` | 14 tiers from Board of Directors to Para-professional. Seniority analysis. |
-| `ismanager` / `Manager_Flag` | Manager identification. 1,216 flagged as managers. |
+| `management_level` | 14 tiers from Board of Directors to Para-professional. **Use for seniority bands** (see below). |
+| `ismanager` | Has direct reports (1=yes, 0=no). 1,216 people managers. **Do not use `Manager_Flag`** — it's a broader comp flag that disagrees with `ismanager` for 1,061 people. |
 | `manager_id` / `manager_name` | Direct manager. Enables team-level groupings. |
 | `CF_EE_Org_Leader_1` through `_7` | Full reporting chain up to 7 levels. Org-level rollups. |
 | `supervisory_organization` | Named team unit. Enables team synchronization analysis. |
@@ -78,15 +81,29 @@ Silence means normal. Cards appear only when there's something worth saying.
 | `VX_Hierarchy` / `location_hierarchy_region` | Region (EMEA/Americas/APJ). |
 | `sales_segment` / `sub_region` / `country` | Geographic and segment detail. |
 | `businesstitle` / `job_profile` | Specific title for person-level context. |
-| `preferred_name` / `legal_name` | Display names for leaderboard and person queries. |
+| `preferred_name` / `legal_name` | Display names. **Always use `preferred_name`** — `legal_name` has encoding issues for non-Latin characters (e.g., Czech, Armenian names). |
 | `worker_status` | Active / On Leave filter. |
+
+**Stream fallback (625 people have blank `stream`):** These are legacy job architecture records ("OLD JA" suffix). Map via `job_family_group`:
+- R&D, Engineering → R&D stream
+- Quota Carrying Sales, Quota Carrying Overlay, Sales → Sales stream
+- Professional Services → Cost of Revenue stream
+- HR, Facilities, Corporate, Finance, Legal, Strategy, Governance → G&A stream
+- Corporate Marketing, Regional Marketing, General Marketing → Marketing stream
+
+**Seniority bands for analysis** (derived from `management_level`):
+- **IC:** Professional, Senior Para-professional, Para-professional, Consultant (3,366 people)
+- **Manager:** Manager, Team Leader, Supervisor (1,885 people)
+- **Senior Leader:** Senior Manager, Director, Senior Director, VP, SVP, Chief Officer, Board (1,475 people)
+
+Do not use `Manager_Flag` or `ismanager` for seniority analysis. Use `ismanager` only when the question is "does this person have direct reports."
 
 ### Enrichment: Weather
 
 - Free API (Open-Meteo, no key required) per office city
 - Daily: temperature, precipitation, snow, wind
-- Purpose: separate behavioral change from weather noise when reporting anomalies
-- Per-office learned coefficients over time
+- **v1 approach:** Qualitative context only. Claude checks weather at query time and mentions it as narrative context ("Heavy rain in Prague today — may partially explain the spike"). No coefficients, no numeric adjustment. 80% of the weather value at 10% of the complexity.
+- **v1.5 approach (if demand materializes):** Per-office learned coefficients. Requires months of paired data to be statistically meaningful — premature in v1.
 
 ### Enrichment: Calendar / Holidays
 
@@ -117,7 +134,11 @@ The foundation. Per-office, per-day-of-week, rolling 8-week window. "Normal for 
 Baselines are computed at three levels:
 1. **Office-wide** — total headcount vs. baseline
 2. **Role-segmented** — separate baselines per stream (Sales / R&D / G&A / Cost of Revenue / Marketing). A 15% drop in R&D in Bucharest means something different than a 15% drop in Field Sales in Atlanta.
-3. **Seniority-segmented** — separate baselines for IC vs. Manager vs. Director+. Reveals whether drops are top-down or bottom-up.
+3. **Seniority-segmented** — separate baselines for IC vs. Manager vs. Senior Leader. Reveals whether drops are top-down or bottom-up.
+
+**Minimum-N threshold:** If a stream at an office has <10 people, do not compute a separate baseline — roll into office-wide. The system prompt notes: "Marketing not shown separately for Berlin — too few people for meaningful baseline."
+
+**Holiday heuristic:** If a day's headcount drops below 20% of its DOW baseline, exclude it from the rolling window as a likely holiday/anomaly. Self-correcting without requiring external holiday calendars in v1.
 
 #### Office Personality Profile
 
@@ -131,7 +152,7 @@ Each office gets a computed behavioral fingerprint, updated on a rolling basis:
 | **Arrival center** | When people actually show up | Median arrival time (first event of day, local time) |
 | **Weekend boundary** | Hard Friday cliff vs. gradual fade | Friday/Thursday attendance ratio |
 | **Volatility** | How predictable is this office week-to-week | 8-week std deviation of daily headcount |
-| **Size class** | Mega (1000+), Large (200+), Mid (100+), Small (<100) | Distinct person count. Determines statistical confidence and viable metrics. |
+| **Size class** | Mega (1000+), Large (200+), Mid (100+), Small (<100) | Distinct person count. Determines statistical confidence, viable metrics, and anchor count scaling. |
 
 The personality is the lens. Deviations are measured against *that office's own pattern*. Prague at 60% might be a red flag. Atlanta at 60% might be a great day.
 
@@ -172,7 +193,7 @@ A running composite score tracking four decay signals simultaneously:
 3. **Shape flattening** — the gap between peak and trough days is narrowing. The culture is dissolving into uniform mediocrity.
 4. **Active window compression** — people who do come in are staying shorter. Ghost offices hollow out before they empty out.
 
-When all signals move in the same direction for 4+ weeks, the agent surfaces it as a narrative, not an alarm.
+Trigger threshold: **3 of 4 signals** declining for 4+ consecutive weeks, or **2 of 4** for 6+ weeks. Surfaced as a narrative, not an alarm.
 
 #### Rhythm Shift Detection
 
@@ -224,8 +245,10 @@ Per-office, weekly, named. Celebrates the people who make the office work — cu
 
 **Computation (nightly):**
 - For each office, rank all people by days present this week (ties broken by dwell time)
+- **Anchor/leaderboard count scales by office size:** Small (<100) = top 5, Mid (100-500) = top 10, Large (500+) = top 15, Mega (1000+) = top 20
 - Compare to prior week: compute trend (up / down / steady)
-- Track rolling 4-week streak (consecutive weeks in top 10)
+- Track rolling 4-week streak (consecutive weeks in top N)
+- For people not matched to Workday (the rare 1-event visitors who somehow rank): show email, note "not matched to employee directory"
 
 **Leaderboard card:**
 ```
@@ -252,9 +275,11 @@ Within a `supervisory_organization`, what's the weekly overlap? If a team of 8 h
 
 **Team sync** = (average daily co-present team members) / (total team members who came in that week). High sync = coordinated days. Low sync = scheduling past each other.
 
+**Role-aware interpretation:** Low team sync in R&D/Engineering is less concerning — async focus work is normal and intentional. Low sync in Inside Sales is a collaboration problem (bullpen energy matters). Low sync in cross-functional teams (mixed stream) matters most. The system prompt must teach Claude to contextualize, not penalize engineering teams for working async.
+
 #### Seniority Inversion Detection
 
-Compare attendance rates by `management_level` bands within each office. When ICs are consistently more present than their leadership chain and the gap is widening, the agent flags the pattern without editorializing.
+Compare attendance rates by seniority band (IC / Manager / Senior Leader, derived from `management_level`) within each office. When ICs are consistently more present than their leadership chain and the gap is widening, the agent flags the pattern without editorializing. Do not use `Manager_Flag` or `ismanager` for this — they are unreliable for seniority analysis.
 
 #### New Hire Integration Curve
 
@@ -281,7 +306,9 @@ A person appearing in Prague on Monday and Berlin on Wednesday is traveling. Tra
 - **Visitor role context**: "Berlin received 12 visitors from Prague — 8 Engineering, 4 Product"
 - **Magnet offices** / **Isolated offices**
 
-Home office inferred as most-frequent office over trailing 8 weeks.
+Home office inferred as most-frequent office over trailing 8 weeks (must have >60% of appearances to qualify — otherwise flagged as multi-office).
+
+**Visitor vs. relocation:** Cross-office visits are appearances at a non-home office lasting ≤5 consecutive working days. Longer streaks are excluded from visitor flow counts and flagged as potential relocations.
 
 #### Company-Wide Trend Layer
 
@@ -315,7 +342,7 @@ Composite per-office score. Seven components, each 0-100, weighted:
 | **Consistency** | 20% | Week-to-week headcount volatility per DOW | CV across 8 weeks. CV=0→100, CV=0.5→0 |
 | **Depth** | 15% | Active window vs. own baseline | current_dwell / baseline_dwell × 100 |
 | **Synchronization** | 20% | Team-level pairwise co-presence rates | Mean Jaccard across teams × 100 |
-| **Anchor Stability** | 15% | Top-10 anchor retention over 8 weeks | retained/10 × 100 |
+| **Anchor Stability** | 15% | Top-N anchor retention over 8 weeks (N scales by office size) | retained/N × 100 |
 | **Integration** | 10% | New hire attendance slope | Positive slope → high, negative → low. Default 70 if <3 hires |
 | **Leadership Presence** | 10% | IC-vs-leadership gap trajectory | Gap widening → lower. Stable gap → 80 |
 | **Breadth** | 10% | Cross-functional stream representation | Daily qualifying streams / max possible × 100 |
@@ -352,7 +379,7 @@ GLOBAL PULSE
 PRAGUE ██████████████████░░ 84% | baseline 71% | +13pp
   R&D: 91% (+8pp) | Sales: 68% (+22pp ← unusual)
   Active window: 7.8h (normal) | Arrival: 8:20am (25min early)
-  Weather-adjusted: +6pp (rainy day, typically +7pp)
+  Note: rainy day in Prague — may partially explain the spike
   Anchors: 11/12 present | Team sync: 0.72 (high)
   Culture Health: 81 (stable)
   → 3rd consecutive day above baseline — emerging surge
@@ -361,8 +388,8 @@ PRAGUE ██████████████████░░ 84% | baseli
 ATLANTA ██████░░░░░░░░░░░░░░ 31% | baseline 48% | -17pp
   Inside Sales: 28% (baseline 62%) | -34pp ← the story
   Active window: 4.1h (baseline 6.2h) — people leaving early
-  Weather-adjusted: -12pp (clear day, no weather excuse)
-  Anchors: 2/8 present | Team sync: 0.18 (low)
+  Note: clear weather, no external explanation for drop
+  Anchors: 2/8 present | Team sync: 0.18 (low — Inside Sales, this matters)
   Culture Health: 44 (declining, -3/week for 6 weeks)
   → Inside Sales driving the drop — Field Sales and SE unchanged
   → Friday pattern appearing on Wednesdays — watch this
@@ -417,7 +444,7 @@ WATCH LIST (unchanged)
 | Deviation from DOW baseline | > ±10pp (configurable) |
 | Role-segmented deviation | > ±15pp for any stream within an office |
 | Active window compression | > 1.5h below baseline sustained 2+ weeks |
-| Ghost score threshold crossed | Composite of Friday + peak + shape + dwell |
+| Ghost score threshold crossed | 3 of 4 signals for 4+ weeks, or 2 of 4 for 6+ weeks |
 | Rhythm shift sustained | Profile change held 4+ weeks |
 | Anchor erosion | 2+ anchors absent 3+ consecutive weeks |
 | Team sync collapse | Score drops below 0.2 for 3+ weeks |
@@ -426,7 +453,7 @@ WATCH LIST (unchanged)
 | CHI decline | >3 points/week for 4+ consecutive weeks |
 | Cross-office visitor spike | >2x vs. 8-week average |
 | Underutilization (small offices) | <5 people on >60% of working days |
-| Weather-adjusted anomaly | Large deviation with no weather explanation |
+| Weather context anomaly (v1.5 for numeric adjustment) | Large deviation on a clear-weather day — Claude notes qualitatively |
 
 ### No-Card Rule
 
@@ -480,7 +507,7 @@ Beyond the briefing, the agent answers questions on demand. No restrictions on p
 
 | Signal | Trigger |
 |--------|---------|
-| **Ghost office early warning** | Friday + peak + shape + dwell all declining 4+ weeks |
+| **Ghost office early warning** | 3 of 4 decay signals for 4+ weeks, or 2 of 4 for 6+ weeks |
 | **Rhythm shift** | Weekly shape changed and held 4+ weeks |
 | **Anchor erosion** | 2+ anchors absent 3+ weeks |
 | **Team sync collapse** | Score below 0.2 for 3+ weeks |
@@ -488,7 +515,7 @@ Beyond the briefing, the agent answers questions on demand. No restrictions on p
 | **New hire disengagement** | Negative integration slopes across multiple recent hires |
 | **Cross-office surge** | Visitor traffic to a site spikes >2x |
 | **Active window compression** | Median dwell declining while headcount stable |
-| **Weather-adjusted anomaly** | Large deviation with no weather explanation |
+| **Weather context note** | Large deviation on a clear-weather day — qualitative v1, numeric adjustment v1.5 |
 | **CHI decline** | CHI dropping 3+/week for 4+ weeks |
 
 ---
@@ -748,7 +775,20 @@ Pushed every morning (7:00 AM per geo):
 - Users auto-registered on first chat
 - Generated from pre-computed briefing content (no real-time queries needed)
 
-### Error Handling
+### Infrastructure Notes
+
+- **Container min replicas: 1.** Always warm. Cold start (5-15 sec) is unacceptable for exec-facing tool. Cost: ~$30-50/mo extra.
+- **Databricks warehouse:** Use serverless SQL warehouse if available (auto-starts in ~5-10 sec vs. 30-60 sec for standard). Keep warm during business hours via periodic heartbeat if needed.
+- **Anthropic API key:** Needs dedicated key (Signal's dev key is depleted). Set spend limits appropriate to expected volume.
+
+### Pipeline Failure Handling
+
+- **Retry with backoff:** On Databricks connectivity failure, retry 3x with exponential backoff (5s, 15s, 45s)
+- **Alert on failure:** If pipeline fails after retries, send Teams notification to admin channel with error details
+- **Serve stale data with warning:** If pipeline fails, Tier 1 cache serves yesterday's pre-computed data. Briefing header notes: "Data may be stale — pipeline issue under investigation"
+- **Idempotent re-runs:** Pipeline can be re-triggered manually without double-counting (uses date-based partitioning, not append)
+
+### Query-Time Error Handling
 
 | Failure | Response |
 |---------|----------|
@@ -822,7 +862,47 @@ Data refreshes overnight. Do not caveat every response. Be honest when asked abo
 
 ## Roadmap
 
-### v1 — Core
+### v1 — Core (Build Phases)
+
+**Phase 1 — Core Loop (build first, validate data assumptions):**
+
+| Feature | Notes |
+|---------|-------|
+| Nightly pipeline: person-day aggregation + Workday join + office-wide baselines | Foundation |
+| Office personality profiles | Rhythm, peak shape, active window, arrival, volatility |
+| Dwell time / active window tracking | First/last O365 event — validated, natural distribution |
+| Anchors + office leaderboard | Scaled by office size. Names, roles, trends, streaks. |
+| Tools: query_office_intel + query_person (basic) | Tier 1 + Tier 2 |
+| System prompt (v1) | Intelligence layer |
+| CLI test harness | Local development |
+| Standard Insight + Office Profile + Leaderboard card templates | Core cards |
+
+**Phase 2 — Org Intelligence (add after Phase 1 validated):**
+
+| Feature | Notes |
+|---------|-------|
+| Role-segmented baselines | Stream segmentation with min-N=10 threshold |
+| Team synchronization scoring | Per team Jaccard with role-aware interpretation |
+| Ghost / rhythm shift detection | 3-of-4 / 2-of-4 thresholds |
+| Culture Health Index | 7-component composite |
+| Cross-office visitor tracking | Flow network with visit vs. relocation distinction |
+| Cohort overlap (same-people test) | Per office day-pair Jaccard |
+| Company-wide trend layer + underutilization score | Global pulse |
+| Dual-source confidence | Background quality check |
+| Arrival drift | Median arrival as tracked baseline |
+| All remaining card templates | Comparison, Team View, Daily Briefing, etc. |
+| Conversational queries (office, person, team) | Full query set |
+
+**Phase 3 — Deploy:**
+
+| Feature | Notes |
+|---------|-------|
+| FastAPI + M365 Agents SDK wrapper | Teams integration |
+| Daily briefing push (4-level) | Proactive morning delivery |
+| Azure Container App deployment (min replicas=1) | Production |
+| Teams + Copilot bot registration | SG-PI-Users access control |
+
+**Full v1 feature list:**
 
 | Feature | Notes |
 |---------|-------|
@@ -851,7 +931,7 @@ Data refreshes overnight. Do not caveat every response. Be honest when asked abo
 
 | Feature | Notes |
 |---------|-------|
-| Weather adjustment | Open-Meteo, per-office learned coefficients |
+| Weather numeric adjustment | Open-Meteo per-office learned coefficients (v1 uses qualitative context only) |
 | Holiday / event annotation | Public calendars, company events |
 | Manager gravity scoring | Manager-team attendance correlation |
 | Seniority inversion detection | Management level comparison |
@@ -871,6 +951,19 @@ Data refreshes overnight. Do not caveat every response. Be honest when asked abo
 | Org-leader rollup views | Full hierarchy aggregation |
 
 ---
+
+## Data Validation Results (March 28, 2026)
+
+| Check | Result | Impact |
+|-------|--------|--------|
+| **Dwell time (last O365 event)** | Validated. Natural taper 3-7pm, no pipeline cutoff. Per-office median 4.6-6.3h. | Dwell time and active window features are fully usable. |
+| **Unmatched 20% emails** | All @veeam.com, all with exactly 1 event. One-time badge-ins (former employees, test accounts). | Non-issue. Regular attendees match at ~95%+. No fix needed. |
+| **Manager flags** | `ismanager` = has reports (1,216). `Manager_Flag` = broader comp flag, disagrees for 1,061 people. | Use `management_level` for seniority bands. Never use `Manager_Flag`. |
+| **Blank stream** | 625 people (9%) on legacy job architecture ("OLD JA"). Spread across R&D, Sales, others. | Fallback mapping from `job_family_group` to stream defined in spec. |
+| **Dwell by office** | Mexico median 1.5h (brief check-ins). All others 4.6-6.3h (genuine office days). | Mexico underutilization score will naturally reflect this. |
+| **Event deduplication** | Multiple events per second for same person (O365 burst). | Event count is NOT an intensity proxy. Only use for arrival/departure/headcount. |
+| **Pipeline freshness** | 1-2 day lag confirmed. Volumes healthy and consistent week-over-week. | Normal batch pipeline behavior. Not a data quality issue. |
+| **Workday terminations** | Only 159 of 6,726 have termination_date filled. | Most Workday records are active. Historical occupancy for departed people handled by 1-event unmatched pattern. |
 
 ## Resolved Questions
 
