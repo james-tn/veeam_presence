@@ -63,8 +63,10 @@ def run_agent(user_message, history=None):
     # Add routing hints for tricky queries
     routed_message = _add_routing_hint(user_message)
 
-    # Build messages — trim to last 10 exchanges to control tokens
-    messages = list(history[-20:])  # 10 pairs = 20 messages
+    # Build messages — trim to last 10 exchanges, ensure starts with user
+    messages = list(history[-20:])
+    if messages and messages[0].get("role") != "user":
+        messages = messages[1:]  # Drop orphaned assistant message
     messages.append({"role": "user", "content": routed_message})
 
     # Claude API call with tools

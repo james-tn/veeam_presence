@@ -133,17 +133,6 @@ def _person_pattern(df, email):
     avg_arrival = round(valid_dwell["arrival_hour"].mean(), 1) if len(valid_dwell) > 0 and "arrival_hour" in valid_dwell.columns else 0
     avg_departure = round(valid_dwell["departure_hour"].mean(), 1) if len(valid_dwell) > 0 and "departure_hour" in valid_dwell.columns else 0
 
-    # Office baseline comparison — use cached baselines from query_office_intel
-    from tools.query_office_intel import _ensure_cache, _cache
-    _ensure_cache()
-    office_bl = _cache.get("baselines", {}).get(office, {})
-    office_pool = office_bl.get("active_pool", 0)
-
-    # Compare to office average
-    # Sum of DOW rates = expected days/week for a random person in the pool
-    office_dow_baselines = office_bl.get("dow_baselines", {})
-    office_avg_days = sum(b.get("rate", 0) for b in office_dow_baselines.values()) if office_dow_baselines else 0
-
     return {
         "name": name,
         "office": office,

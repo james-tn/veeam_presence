@@ -56,8 +56,10 @@ def enrich_with_workday(person_day_df, workday_df):
     people_matched = enriched.loc[enriched["workday_matched"], "email"].nunique()
     people_total = enriched["email"].nunique()
 
-    print(f"  [Enrich] {matched:,}/{total:,} person-days matched ({matched/total*100:.0f}%)")
-    print(f"    People: {people_matched:,}/{people_total:,} matched ({people_matched/people_total*100:.0f}%)")
+    match_pct = matched / total * 100 if total > 0 else 0
+    people_pct = people_matched / people_total * 100 if people_total > 0 else 0
+    print(f"  [Enrich] {matched:,}/{total:,} person-days matched ({match_pct:.0f}%)")
+    print(f"    People: {people_matched:,}/{people_total:,} matched ({people_pct:.0f}%)")
     print(f"    Stream distribution: {enriched['stream'].value_counts().to_dict()}")
     print(f"    Seniority: {enriched['seniority_band'].value_counts().to_dict()}")
 

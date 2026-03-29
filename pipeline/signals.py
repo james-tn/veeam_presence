@@ -32,14 +32,20 @@ def compute_signals(enriched_df, baselines):
             continue
 
         # --- Weekly aggregation for trend detection ---
-        weekly = odf.groupby(pd.Grouper(key="date", freq="W-MON")).agg(
-            headcount=("email", "nunique"),
-            fri_hc=("email", lambda x: x[odf.loc[x.index, "dow"] == 4].nunique()),
-            peak_hc=("email", lambda x: max(
-                odf.loc[x.index].groupby("dow")["email"].nunique().values
-            ) if len(x) > 0 else 0),
-            dwell_median=("dwell_hours", lambda x: x[x > 0].median() if len(x[x > 0]) > 0 else 0),
-        ).reset_index()
+        # Compute weekly stats with a manual loop to avoid fragile lambda closures
+        week_groups = odf.groupby(pd.Grouper(key="date", freq="W-MON"))
+        weekly_rows = []
+        for week_start, wg in week_groups:
+            if len(wg) == 0:
+                continue
+            hc = wg["email"].nunique()
+            fri = wg[wg["dow"] == 4]["email"].nunique()
+            dow_counts = wg.groupby("dow")["email"].nunique()
+            peak = int(dow_counts.max()) if len(dow_counts) > 0 else 0
+            dwell_vals = wg.loc[wg["dwell_hours"] > 0, "dwell_hours"]
+            dwell_med = dwell_vals.median() if len(dwell_vals) > 0 else 0
+            weekly_rows.append({"date": week_start, "headcount": hc, "fri_hc": fri, "peak_hc": peak, "dwell_median": dwell_med})
+        weekly = pd.DataFrame(weekly_rows)
         weekly = weekly[weekly["headcount"] > 0].tail(8)
 
         if len(weekly) < 4:

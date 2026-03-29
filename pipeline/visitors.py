@@ -51,7 +51,7 @@ def compute_visitors(enriched_df):
     # --- Aggregate flows ---
     flows = visits.groupby(["home_office", "office"]).agg(
         visitors=("email", "nunique"),
-        visit_days=("date", "nunique"),
+        visit_days=("date", "count"),  # person-visit-days, not calendar days
     ).reset_index()
     flows.columns = ["from_office", "to_office", "visitors", "visit_days"]
     flows = flows.sort_values("visitors", ascending=False)

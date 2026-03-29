@@ -31,7 +31,7 @@ def compute_chi(enriched_df, baselines, anchors, team_sync, signals):
         if pool < 10:
             continue
 
-        odf = wdf[wdf["office"] == office_name]
+        odf = wdf[wdf["office"] == office_name].sort_values("date")
         if len(odf) == 0:
             continue
 
@@ -75,7 +75,8 @@ def compute_chi(enriched_df, baselines, anchors, team_sync, signals):
             nh_weekly = new_hires.groupby([pd.Grouper(key="date", freq="W-MON")])["email"].nunique()
             if len(nh_weekly) > 2:
                 slope = np.polyfit(range(len(nh_weekly)), nh_weekly.values, 1)[0]
-                integration = min(100, max(0, 50 + slope * 500))
+                # Dampen: scale by 100 not 500, cap contribution to ±30 from midpoint
+                integration = min(100, max(0, 50 + max(-30, min(30, slope * 100))))
             else:
                 integration = 70
         else:
@@ -96,7 +97,10 @@ def compute_chi(enriched_df, baselines, anchors, team_sync, signals):
             current_gap = (ic_recent - leader_recent) if ic_recent > 0 else 0
             prior_gap = (ic_prior - leader_prior) if ic_prior > 0 else 0
             gap_change = current_gap - prior_gap
-            leadership = max(0, min(100, 80 - gap_change * 40))
+            # Normalize gap_change by office size to prevent small-office volatility
+            norm = max(ic_recent, leader_recent, 5)  # Floor of 5 to dampen small numbers
+            gap_pct = gap_change / norm
+            leadership = max(0, min(100, 80 - gap_pct * 200))
         else:
             leadership = 70
 
