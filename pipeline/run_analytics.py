@@ -16,6 +16,9 @@ from baselines import compute_baselines
 from personality import compute_personality
 from anchors import compute_anchors
 from visitors import compute_visitors
+from team_sync import compute_team_sync
+from signals import compute_signals
+from chi import compute_chi
 
 
 def load_json_data(filepath, label=""):
@@ -94,6 +97,24 @@ def run_analytics():
     visitors_data = compute_visitors(enriched)
     with open(os.path.join(data_dir, "visitors.pkl"), "wb") as f:
         pickle.dump(visitors_data, f)
+
+    # Step 8: Team synchronization
+    print("\n[Step 8] Computing team synchronization scores...")
+    team_sync_data = compute_team_sync(enriched)
+    with open(os.path.join(data_dir, "team_sync.pkl"), "wb") as f:
+        pickle.dump(team_sync_data, f)
+
+    # Step 9: Ghost detection and signals
+    print("\n[Step 9] Computing ghost detection and signals...")
+    signals_data = compute_signals(enriched, baselines)
+    with open(os.path.join(data_dir, "signals.pkl"), "wb") as f:
+        pickle.dump(signals_data, f)
+
+    # Step 10: Culture Health Index
+    print("\n[Step 10] Computing Culture Health Index...")
+    chi_data = compute_chi(enriched, baselines, anchors_data, team_sync_data, signals_data)
+    with open(os.path.join(data_dir, "chi.pkl"), "wb") as f:
+        pickle.dump(chi_data, f)
 
     # Summary
     elapsed = time.time() - start
