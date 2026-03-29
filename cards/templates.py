@@ -24,7 +24,7 @@ def briefing_card(data):
                     {"type": "TextBlock", "text": f"Data through {date}", "size": "Small", "color": "Light", "spacing": "None"},
                 ]},
                 {"type": "Column", "width": "auto", "verticalContentAlignment": "Center", "items": [
-                    {"type": "TextBlock", "text": f"**{total}**", "size": "ExtraLarge", "color": "Light"},
+                    {"type": "TextBlock", "text": str(total), "size": "ExtraLarge", "color": "Light"},
                 ]},
             ]},
         ]},
@@ -108,7 +108,7 @@ def office_detail_card(data):
     if top:
         top_items = [{"type": "TextBlock", "text": "Top people this week", "weight": "Bolder", "size": "Small"}]
         for p in top[:4]:
-            top_items.append({"type": "TextBlock", "text": f"**{p['name']}** ({p.get('role', '')}) — {p['days']}", "size": "Small", "spacing": "None", "wrap": True})
+            top_items.append({"type": "TextBlock", "text": f"{p['name']} ({p.get('role', '')}) — {p['days']}", "size": "Small", "spacing": "None", "wrap": True})
         body.append({"type": "Container", "style": "Emphasis", "spacing": "Medium", "items": top_items})
 
     body.append(_freshness(date))
@@ -146,8 +146,8 @@ def leaderboard_card(data):
         color = "Good" if trend == "up" else ("Attention" if trend == "down" else "Default")
 
         body.append({"type": "ColumnSet", "spacing": "Small" if i == 1 else "None", "columns": [
-            _col("24px", f"**{i}**"),
-            _col("stretch", f"**{name}**  \n{role}", wrap=True),
+            _col("24px", str(i), bold=True),
+            _col("stretch", f"{name}  \n{role}", wrap=True),
             _col("55px", f"{days}{trend_icon}", align="Right", bold=True, color=color),
         ]})
 
@@ -253,7 +253,7 @@ def trending_card(data):
 
     for p in data.get("people", [])[:8]:
         body.append({"type": "ColumnSet", "spacing": "None", "columns": [
-            _col("stretch", f"**{p['name']}**  \n{p.get('office', '')}", wrap=True),
+            _col("stretch", f"{p['name']}  \n{p.get('office', '')}", wrap=True),
             _col("70px", p.get("was", ""), align="Right"),
             _col("70px", p.get("now", ""), align="Right", bold=True, color="Good" if is_up else "Attention"),
         ]})
@@ -285,7 +285,7 @@ def visitors_card(data):
     if trips:
         body.append({"type": "TextBlock", "text": "Recent trips", "weight": "Bolder", "size": "Small", "spacing": "Medium"})
         for t in trips:
-            body.append({"type": "TextBlock", "text": f"**{t['name']}** ({t['home_office']}) visited {t['visited']} for {t['days']} days", "size": "Small", "spacing": "None", "wrap": True})
+            body.append({"type": "TextBlock", "text": f"{t['name']} ({t['home_office']}) visited {t['visited']} for {t['days']} days", "size": "Small", "spacing": "None", "wrap": True})
 
     return _wrap(body, _actions([("All offices", "Give me the daily briefing")]))
 
@@ -304,7 +304,7 @@ def who_was_in_card(data):
 
     for p in data.get("people", [])[:12]:
         body.append({"type": "ColumnSet", "spacing": "None", "columns": [
-            _col("stretch", f"**{p.get('name', '')}**"),
+            _col("stretch", p.get("name", "")),
             _col("60px", p.get("stream", ""), subtle=True),
             _col("50px", p.get("arrival", ""), align="Right"),
         ]})
