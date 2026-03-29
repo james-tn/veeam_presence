@@ -254,7 +254,7 @@ def _visitors():
 
 TOOL_SCHEMA = {
     "name": "query_person",
-    "description": "Get data about individual people. Use for: looking up a specific person's attendance pattern, listing who was in an office on the most recent day, or finding who's trending up/down. Only call this when the question is about specific people — for office-level questions use query_office_intel instead.",
+    "description": "Get data about people: individual attendance patterns, who was in an office, trending up/down, and cross-office travel/visitors. Use query_type='visitors' for any question about travel between offices.",
     "input_schema": {
         "type": "object",
         "properties": {
