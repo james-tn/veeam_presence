@@ -33,7 +33,9 @@ if not os.path.exists(os.path.join(config.DATA_DIR, "baselines.pkl")):
 
 from agent import run_agent
 from tools.query_office_intel import load_cache
-load_cache()  # Pre-load Tier 1 cache
+from tools.query_person import _load_enriched
+load_cache()        # Pre-load Tier 1 cache
+_load_enriched()    # Pre-load person data
 
 # Card JSON output directory
 os.makedirs(config.OUTPUT_DIR, exist_ok=True)

@@ -73,12 +73,20 @@ def query_office_intel(office=None, metric=None):
     an = _cache["anchors"].get(matched, {})
 
     if metric in ("all", "baseline"):
+        # Compact role baselines — only send latest rate + deviation, not full DOW arrays
+        compact_roles = {}
+        for stream, rb in bl.get("role_baselines", {}).items():
+            compact_roles[stream] = {
+                "pool": rb.get("pool", 0),
+                "latest_rate": rb.get("latest_rate", 0),
+                "deviation_pp": rb.get("deviation_pp", 0),
+            }
         result["baseline"] = {
             "active_pool": bl.get("active_pool", 0),
             "latest": bl.get("latest", {}),
             "dow_baselines": bl.get("dow_baselines", {}),
-            "weekly_trend": bl.get("weekly_trend", []),
-            "role_baselines": bl.get("role_baselines", {}),
+            "weekly_trend": bl.get("weekly_trend", [])[-4:],  # Last 4 weeks only
+            "role_baselines": compact_roles,
             "seniority_baselines": bl.get("seniority_baselines", {}),
         }
 
@@ -92,7 +100,6 @@ def query_office_intel(office=None, metric=None):
             "max_days_this_week": an.get("max_days_this_week", 5),
             "total_appeared_this_week": an.get("total_appeared_this_week", 0),
             "entries": an.get("leaderboard", [])[:10],  # Card cap at 10
-            "full_entries": an.get("leaderboard", []),  # Full list for "show more"
             "erosion_rate": an.get("erosion_rate", 0),
             "erosion_alert": an.get("erosion_alert", False),
         }
@@ -133,16 +140,11 @@ def _global_summary():
         offices.append({
             "name": name,
             "region": config.OFFICES.get(name, {}).get("region", "Unknown"),
-            "active_pool": pool,
-            "latest_headcount": hc,
-            "latest_rate": rate,
-            "deviation_pp": dev,
-            "rhythm_type": pr.get("rhythm_type", "unknown"),
-            "peak_day": pr.get("peak_day", "unknown"),
-            "active_window_hours": pr.get("active_window_hours", 0),
-            "volatility_label": pr.get("volatility_label", "unknown"),
-            "erosion_alert": an.get("erosion_alert", False),
-            "#1_name": an.get("leaderboard", [{}])[0].get("name", "N/A") if an.get("leaderboard") else "N/A",
+            "pool": pool,
+            "headcount": hc,
+            "rate": rate,
+            "dev_pp": dev,
+            "erosion": an.get("erosion_alert", False),
         })
 
     # Regional aggregation
