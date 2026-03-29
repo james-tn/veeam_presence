@@ -115,9 +115,11 @@ def _person_pattern(df, email):
     dow_names = {0: "Mon", 1: "Tue", 2: "Wed", 3: "Thu", 4: "Fri"}
     dow_pattern = {dow_names.get(k, str(k)): int(v) for k, v in dow_counts.items()}
 
-    # Dwell
-    valid_dwell = weekdays[weekdays["dwell_hours"] > 0]["dwell_hours"]
-    avg_dwell = round(valid_dwell.mean(), 1) if len(valid_dwell) > 0 else 0
+    # Dwell and arrival/departure times
+    valid_dwell = weekdays[weekdays["dwell_hours"] > 0]
+    avg_dwell = round(valid_dwell["dwell_hours"].mean(), 1) if len(valid_dwell) > 0 else 0
+    avg_arrival = round(valid_dwell["arrival_hour"].mean(), 1) if len(valid_dwell) > 0 and "arrival_hour" in valid_dwell.columns else 0
+    avg_departure = round(valid_dwell["departure_hour"].mean(), 1) if len(valid_dwell) > 0 and "departure_hour" in valid_dwell.columns else 0
 
     # Office baseline comparison — use cached baselines from query_office_intel
     from tools.query_office_intel import _ensure_cache, _cache
@@ -144,9 +146,9 @@ def _person_pattern(df, email):
             "total_weekdays_present": total_weekdays,
             "avg_days_per_week": round(avg_days_per_week, 1),
             "trend": trend,
-            "recent_avg": round(recent_avg, 1),
-            "prior_avg": round(prior_avg, 1),
             "avg_dwell_hours": avg_dwell,
+            "usual_arrival": _hour_to_time(avg_arrival),
+            "usual_departure": _hour_to_time(avg_departure),
             "dow_pattern": dow_pattern,
         },
         "office_comparison": {
@@ -160,6 +162,19 @@ def _person_pattern(df, email):
             for _, r in weeks.tail(8).iterrows()
         ],
     }
+
+
+def _hour_to_time(h):
+    """Convert decimal hour to readable time string."""
+    if not h or h == 0:
+        return "N/A"
+    hours = int(h)
+    minutes = int((h - hours) * 60)
+    am_pm = "am" if hours < 12 else "pm"
+    display_hour = hours if hours <= 12 else hours - 12
+    if display_hour == 0:
+        display_hour = 12
+    return f"{display_hour}:{minutes:02d}{am_pm}"
 
 
 def _who_was_in(df, office):
