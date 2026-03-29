@@ -131,6 +131,8 @@ What's happening in the building today, compared to what's normal.
 
 The foundation. Per-office, per-day-of-week, rolling 8-week window. "Normal for Prague on a Wednesday" is the reference point. Every observation is compared to its own baseline, not a company-wide average.
 
+**Attendance rate definition:** `today's distinct headcount / active office pool`. The active office pool = distinct people who appeared at this office at least once in the trailing 8 weeks. This gives a meaningful percentage — "of people who use this office, what fraction showed up today." The pool is DOW-agnostic (same denominator for all days) and refreshes weekly. Example: Prague active pool = 800 people. Today (Wednesday): 672 showed up. Rate = 84%. Baseline for Wednesdays (rolling 8-week avg) = 71%.
+
 Baselines are computed at three levels:
 1. **Office-wide** — total headcount vs. baseline
 2. **Role-segmented** — separate baselines per stream (Sales / R&D / G&A / Cost of Revenue / Marketing). A 15% drop in R&D in Bucharest means something different than a 15% drop in Field Sales in Atlanta.
@@ -209,7 +211,9 @@ With 16+ months of data, the agent builds seasonal context:
 
 #### Collaboration Window
 
-The hours per day when >X% of that day's attendees are simultaneously present. This is the actual window where spontaneous interaction happens. If arrivals spread out and departures get earlier, the collaboration window shrinks even if the headcount doesn't. Captures the *quality* of in-office time, not just the quantity.
+The hours per day when >50% of that day's attendees are simultaneously present (threshold configurable). This is the actual window where spontaneous interaction happens. If arrivals spread out and departures get earlier, the collaboration window shrinks even if the headcount doesn't. Captures the *quality* of in-office time, not just the quantity.
+
+**Computation:** For each person-day, assume continuous presence from first O365 event to last O365 event. For each hour of the day, count people whose presence window spans that hour. Collaboration window = contiguous hours where hourly headcount exceeds 50% of that day's total distinct headcount.
 
 #### Cohort Overlap (The "Same People?" Test)
 
@@ -273,7 +277,7 @@ When a manager is in the office, does their team follow? Measure the correlation
 
 Within a `supervisory_organization`, what's the weekly overlap? If a team of 8 has 6 people coming in per week but never more than 2 on the same day, the in-office time has zero collaboration value.
 
-**Team sync** = (average daily co-present team members) / (total team members who came in that week). High sync = coordinated days. Low sync = scheduling past each other.
+**Team sync** = mean pairwise co-presence rate across all team member pairs. For each pair of team members who both appeared at least once in the week, co-presence rate = (days both present) / (days either present). Averaged across all pairs. Range 0.0 (no overlap) to 1.0 (perfect overlap). This detects the "two-shift" anti-pattern where headcount looks fine but people never see each other.
 
 **Role-aware interpretation:** Low team sync in R&D/Engineering is less concerning — async focus work is normal and intentional. Low sync in Inside Sales is a collaboration problem (bullpen energy matters). Low sync in cross-functional teams (mixed stream) matters most. The system prompt must teach Claude to contextualize, not penalize engineering teams for working async.
 
@@ -403,11 +407,11 @@ SEATTLE — no card
 
 ```
 ORG SIGNALS
-  New hire integration: Prague curve is healthy (positive slope)
-  New hire integration: Atlanta curve is decaying — 6 of 8 recent hires
-    trending below office baseline by week 8
-  Seniority inversion widening in Berlin — Director+ attendance
-    dropped to 1.1 days/week while IC steady at 3.4
+  Atlanta CHI Integration component: 38 and declining — recent hires
+    not establishing office rhythm (full cohort detail in v1.5)
+  Berlin CHI Leadership component: 41 and declining — Senior Leader
+    attendance gap with ICs widening over 8 weeks
+  Prague-Berlin visitor traffic up 3x vs 8-week average
 ```
 
 ### Level 4: Watch List (persistent, updated weekly)
@@ -446,7 +450,7 @@ WATCH LIST (unchanged)
 | Active window compression | > 1.5h below baseline sustained 2+ weeks |
 | Ghost score threshold crossed | 3 of 4 signals for 4+ weeks, or 2 of 4 for 6+ weeks |
 | Rhythm shift sustained | Profile change held 4+ weeks |
-| Anchor erosion | 2+ anchors absent 3+ consecutive weeks |
+| Anchor erosion | >25% of top-N anchors absent 3+ consecutive weeks (scales with office size) |
 | Team sync collapse | Score drops below 0.2 for 3+ weeks |
 | Seniority inversion widening | Gap increased >1 day/week over 8 weeks |
 | New hire integration decay | Negative slope sustained across 3+ recent hires |
@@ -509,7 +513,7 @@ Beyond the briefing, the agent answers questions on demand. No restrictions on p
 |--------|---------|
 | **Ghost office early warning** | 3 of 4 decay signals for 4+ weeks, or 2 of 4 for 6+ weeks |
 | **Rhythm shift** | Weekly shape changed and held 4+ weeks |
-| **Anchor erosion** | 2+ anchors absent 3+ weeks |
+| **Anchor erosion** | >25% of top-N absent 3+ weeks (scales with office size) |
 | **Team sync collapse** | Score below 0.2 for 3+ weeks |
 | **Seniority inversion** | Gap widening between IC and leadership attendance |
 | **New hire disengagement** | Negative integration slopes across multiple recent hires |
@@ -587,7 +591,7 @@ Claude outputs a structured response object. The API layer renders it into Adapt
 ### Size Limits (Teams enforced)
 
 - FactSet: max 8 facts
-- Leaderboard: max 10 entries
+- Leaderboard: display capped at 10 entries (with "Show full leaderboard" action for offices where anchor N > 10)
 - Office cards in briefing: max 5 (with "Show all notable offices" overflow)
 - Actions per card: max 4
 - Total character limit: ~3,000 chars
