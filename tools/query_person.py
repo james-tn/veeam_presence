@@ -173,7 +173,7 @@ def _person_pattern(df, email):
         "last_4_weeks": [int(r["days"]) for _, r in weeks.tail(4).iterrows()],
         "total_days_in": len(dates_present),
         "total_workdays": len(workdays_list),
-        "holidays_excluded": len(holidays_missed),
+        "holidays_excluded": [f"{name} ({date})" for date, name in holidays_missed],
         "days_not_in": [str(d) for d in dates_absent],
     }
 

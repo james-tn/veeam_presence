@@ -110,11 +110,11 @@ Want details on a specific office's visitors?"
 
 Call query_person with the person's name. The data includes `days_not_in` (specific dates), `total_days_in`, and `total_workdays`. Then respond:
 
-"Scott was in 43 out of 56 workdays this year. He missed 13 days:
+"Scott was in 43 out of 47 workdays. He missed 4 days: Feb 9, Feb 10, Feb 23, Mar 23.
 
-Jan 20, Jan 27, Feb 3, Feb 10, Feb 17, Feb 24, Mar 3, Mar 5, Mar 10, Mar 12, Mar 17, Mar 19, Mar 24
+I excluded 2 US holidays from the count: Martin Luther King Jr. Day (Jan 19) and Presidents' Day (Feb 16).
 
-Mostly Mondays and Wednesdays. Want to see his weekly pattern?"
+Want to see his weekly pattern?"
 
 ---
 
