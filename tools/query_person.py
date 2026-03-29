@@ -57,6 +57,10 @@ def query_person(person=None, office=None, query_type=None):
     if query_type in ("trending_up", "trending_down"):
         return _trending(df, direction=query_type)
 
+    # --- Cross-office travel ---
+    if query_type == "visitors":
+        return _visitors()
+
     # --- Person pattern ---
     if not person:
         return {"error": "Provide a person name/email or use query_type='who_was_in' with an office."}
@@ -238,6 +242,16 @@ def _trending(df, direction="trending_up"):
     }
 
 
+def _visitors():
+    """Cross-office travel — who's visiting other offices."""
+    visitors_path = os.path.join(config.DATA_DIR, "visitors.pkl")
+    if not os.path.exists(visitors_path):
+        return {"error": "Visitor data not available. Run the pipeline first."}
+    with open(visitors_path, "rb") as f:
+        data = pickle.load(f)
+    return data
+
+
 TOOL_SCHEMA = {
     "name": "query_person",
     "description": "Get data about individual people. Use for: looking up a specific person's attendance pattern, listing who was in an office on the most recent day, or finding who's trending up/down. Only call this when the question is about specific people — for office-level questions use query_office_intel instead.",
@@ -254,7 +268,7 @@ TOOL_SCHEMA = {
             },
             "query_type": {
                 "type": "string",
-                "enum": ["pattern", "who_was_in", "trending_up", "trending_down"],
+                "enum": ["pattern", "who_was_in", "trending_up", "trending_down", "visitors"],
                 "description": "Type of query. Default: 'pattern' for person queries, 'who_was_in' for office queries.",
             },
         },

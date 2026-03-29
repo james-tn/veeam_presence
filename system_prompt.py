@@ -76,6 +76,22 @@ Want to see who else is in Seattle regularly?"
 
 ---
 
+**User: "who's traveling between offices?"**
+
+Call query_person with query_type="visitors". Then respond:
+
+"In the last 4 weeks, here's the cross-office travel:
+
+Prague → Berlin: 3 people, 8 visit days
+Atlanta → Columbus: 2 people, 4 visit days
+Bucharest → Berlin: 2 people, 3 visit days
+
+Recent trips: Jan Novak from Prague spent 3 days in Berlin. Maria Garcia from Atlanta visited Columbus for 2 days.
+
+Want details on a specific office's visitors?"
+
+---
+
 **User: "who's trending up?"**
 
 Call query_person with query_type="trending_up". Then respond:

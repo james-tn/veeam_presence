@@ -15,6 +15,7 @@ from enrich import enrich_with_workday
 from baselines import compute_baselines
 from personality import compute_personality
 from anchors import compute_anchors
+from visitors import compute_visitors
 
 
 def load_json_data(filepath, label=""):
@@ -87,6 +88,12 @@ def run_analytics():
     anchors_data = compute_anchors(enriched)
     with open(os.path.join(data_dir, "anchors.pkl"), "wb") as f:
         pickle.dump(anchors_data, f)
+
+    # Step 7: Cross-office visitors
+    print("\n[Step 7] Computing cross-office visitor flows...")
+    visitors_data = compute_visitors(enriched)
+    with open(os.path.join(data_dir, "visitors.pkl"), "wb") as f:
+        pickle.dump(visitors_data, f)
 
     # Summary
     elapsed = time.time() - start
