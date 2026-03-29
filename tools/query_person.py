@@ -133,6 +133,11 @@ def _person_pattern(df, email):
     avg_arrival = round(valid_dwell["arrival_hour"].mean(), 1) if len(valid_dwell) > 0 and "arrival_hour" in valid_dwell.columns else 0
     avg_departure = round(valid_dwell["departure_hour"].mean(), 1) if len(valid_dwell) > 0 and "departure_hour" in valid_dwell.columns else 0
 
+    # Compute specific dates present and absent
+    all_dates = pd.date_range(start=weekdays["date"].min(), end=weekdays["date"].max(), freq="B")  # Business days
+    dates_present = set(weekdays["date"].dt.date)
+    dates_absent = sorted([d.date() for d in all_dates if d.date() not in dates_present])
+
     return {
         "name": name,
         "office": office,
@@ -144,6 +149,9 @@ def _person_pattern(df, email):
         "avg_dwell_hours": avg_dwell,
         "days_they_come_in": dow_pattern,
         "last_4_weeks": [int(r["days"]) for _, r in weeks.tail(4).iterrows()],
+        "total_days_in": len(dates_present),
+        "total_workdays": len(all_dates),
+        "days_not_in": [str(d) for d in dates_absent],
     }
 
 

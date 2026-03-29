@@ -92,6 +92,18 @@ Want details on a specific office's visitors?"
 
 ---
 
+**User: "what days was Scott not in?" / "which days did they miss?"**
+
+Call query_person with the person's name. The data includes `days_not_in` (specific dates), `total_days_in`, and `total_workdays`. Then respond:
+
+"Scott was in 43 out of 56 workdays this year. He missed 13 days:
+
+Jan 20, Jan 27, Feb 3, Feb 10, Feb 17, Feb 24, Mar 3, Mar 5, Mar 10, Mar 12, Mar 17, Mar 19, Mar 24
+
+Mostly Mondays and Wednesdays. Want to see his weekly pattern?"
+
+---
+
 **User: "who's trending up?"**
 
 Call query_person with query_type="trending_up". Then respond:
