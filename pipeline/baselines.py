@@ -199,7 +199,7 @@ def compute_baselines(enriched_df):
         results[office_name] = office_result
 
     print(f"  [Baselines] Computed for {len(results)} offices")
-    for name, r in sorted(results.items(), key=lambda x: x.get("active_pool", 0) if isinstance(x, dict) else 0, reverse=True):
+    for name, r in sorted(results.items(), key=lambda x: x[1].get("active_pool", 0), reverse=True):
         pool = r.get("active_pool", 0)
         roles = len(r.get("role_baselines", {}))
         latest = r.get("latest", {})

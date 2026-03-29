@@ -73,7 +73,7 @@ $result | ConvertTo-Json -Depth 10 -Compress | Out-File $out -Encoding utf8
     if proc.returncode != 0:
         raise RuntimeError(f"PowerShell query failed: {proc.stderr[:500]}")
 
-    with open(out_file, "r", encoding="utf-8") as f:
+    with open(out_file, "r", encoding="utf-8-sig") as f:
         data = json.load(f)
 
     columns = data.get("columns", [])

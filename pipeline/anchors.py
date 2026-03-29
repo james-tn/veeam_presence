@@ -153,11 +153,12 @@ def compute_anchors(enriched_df):
                 else:
                     break
             entry["streak_weeks"] = streak
-            entry["streak_label"] = (
-                f"{streak} weeks in top {top_n}" if streak > 1
-                else "new" if streak <= 1
-                else f"1 week"
-            )
+            if streak > 1:
+                entry["streak_label"] = f"{streak} weeks in top {top_n}"
+            elif streak == 1:
+                entry["streak_label"] = "1 week"
+            else:
+                entry["streak_label"] = "new"
 
         # --- Anchor erosion check ---
         # Compare "established" anchors (weeks 5-8) to "recent" top (weeks 1-2)

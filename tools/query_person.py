@@ -74,13 +74,14 @@ def _person_pattern(df, email):
     if len(pdf) == 0:
         return {"error": f"No attendance data for {email}"}
 
-    # Basic info
-    name = pdf["preferred_name"].iloc[0] if pd.notna(pdf["preferred_name"].iloc[0]) else email
+    # Basic info — safe extraction with fallbacks
+    first = pdf.iloc[0]
+    name = first["preferred_name"] if pd.notna(first.get("preferred_name")) else email
     office = pdf["office"].mode().iloc[0] if len(pdf["office"].mode()) > 0 else "Unknown"
-    stream = pdf["stream"].iloc[0] if pd.notna(pdf.get("stream", pd.Series()).iloc[0] if len(pdf) > 0 else None) else "Unknown"
-    title = pdf["businesstitle"].iloc[0] if "businesstitle" in pdf.columns and pd.notna(pdf["businesstitle"].iloc[0]) else ""
-    seniority = pdf["seniority_band"].iloc[0] if "seniority_band" in pdf.columns and pd.notna(pdf["seniority_band"].iloc[0]) else ""
-    matched = pdf["workday_matched"].iloc[0] if "workday_matched" in pdf.columns else False
+    stream = first.get("stream", "Unknown") if pd.notna(first.get("stream")) else "Unknown"
+    title = first.get("businesstitle", "") if pd.notna(first.get("businesstitle")) else ""
+    seniority = first.get("seniority_band", "") if pd.notna(first.get("seniority_band")) else ""
+    matched = bool(first.get("workday_matched", False))
 
     # Weekday attendance
     weekdays = pdf[pdf["dow"] <= 4]
@@ -118,16 +119,16 @@ def _person_pattern(df, email):
     valid_dwell = weekdays[weekdays["dwell_hours"] > 0]["dwell_hours"]
     avg_dwell = round(valid_dwell.mean(), 1) if len(valid_dwell) > 0 else 0
 
-    # Office baseline comparison
-    with open(os.path.join(config.DATA_DIR, "baselines.pkl"), "rb") as f:
-        baselines = pickle.load(f)
-    office_bl = baselines.get(office, {})
+    # Office baseline comparison — use cached baselines from query_office_intel
+    from tools.query_office_intel import _ensure_cache, _cache
+    _ensure_cache()
+    office_bl = _cache.get("baselines", {}).get(office, {})
     office_pool = office_bl.get("active_pool", 0)
 
     # Compare to office average
-    # Office avg days/week ≈ sum of DOW rates × 5
+    # Sum of DOW rates = expected days/week for a random person in the pool
     office_dow_baselines = office_bl.get("dow_baselines", {})
-    office_avg_days = sum(b.get("rate", 0) for b in office_dow_baselines.values()) * 5 if office_dow_baselines else 0
+    office_avg_days = sum(b.get("rate", 0) for b in office_dow_baselines.values()) if office_dow_baselines else 0
 
     return {
         "person": {
