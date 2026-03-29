@@ -16,7 +16,7 @@ def _load_enriched():
 
 
 def _match_person(query):
-    """Find a person by name or email. Returns list of matches."""
+    """Find a person by name or email. Handles nicknames (Tom→Thomas)."""
     df = _load_enriched()
     q = query.lower().strip()
 
@@ -25,12 +25,45 @@ def _match_person(query):
     if len(email_match) > 0:
         return email_match["email"].iloc[0], True
 
-    # Try name match (preferred_name)
-    name_matches = df[df["preferred_name"].fillna("").str.lower().str.contains(q, regex=False)]
+    # Try email partial match (e.g. "tom.murphy" matches "tom.murphy@veeam.com")
+    email_partial = df[df["email"].str.lower().str.contains(q.replace(" ", "."), regex=False)]
+    if len(email_partial) > 0:
+        top = email_partial.groupby("email")["date"].count().idxmax()
+        return top, True
+
+    # Try full name match
+    names = df["preferred_name"].fillna("").str.lower()
+    name_matches = df[names.str.contains(q, regex=False)]
     if len(name_matches) > 0:
-        # Return best match (most person-days = most data)
         top = name_matches.groupby("email")["date"].count().idxmax()
         return top, True
+
+    # Try matching each word separately (handles Tom→Thomas, Bill→William, etc.)
+    words = q.split()
+    if len(words) >= 2:
+        # Match: all words must appear somewhere in the name or email
+        mask = pd.Series(True, index=df.index)
+        for word in words:
+            mask = mask & (names.str.contains(word, regex=False) |
+                          df["email"].str.lower().str.contains(word, regex=False))
+        word_matches = df[mask]
+        if len(word_matches) > 0:
+            top = word_matches.groupby("email")["date"].count().idxmax()
+            return top, True
+
+    # Try last name only (most specific single word)
+    if len(words) >= 2:
+        last = words[-1]
+        last_matches = df[names.str.contains(last, regex=False)]
+        if len(last_matches) > 0:
+            # If multiple matches, prefer one where first name also partially matches
+            first = words[0]
+            better = last_matches[last_matches["email"].str.lower().str.contains(first, regex=False)]
+            if len(better) > 0:
+                top = better.groupby("email")["date"].count().idxmax()
+                return top, True
+            top = last_matches.groupby("email")["date"].count().idxmax()
+            return top, True
 
     return None, False
 
