@@ -2,24 +2,34 @@
 
 ## Who This Is For
 
-Platform / DevOps team deploying Presence to production. Same architecture as Veeam Signal — two containers + Azure Bot Service.
+Platform / DevOps team deploying Presence to production.
 
 ## What You're Deploying
 
-1. **Presence Agent Service** — Python API, handles AI logic. Port 8000.
-2. **M365 Gateway** — Thin wrapper connecting Teams/Copilot. Port 3978.
-3. **Pipeline Job** — Scheduled container job that refreshes data nightly.
+Three containers behind Azure Bot Service:
+
+1. **Presence Agent Service** — Python FastAPI app that handles the AI logic. Receives questions, calls Claude (Anthropic API) with tools, returns answers. Port 8000. Internal only (not public).
+2. **M365 Gateway** — Thin wrapper that connects Microsoft Teams and Copilot to the agent service. Handles authentication, typing indicators, and Adaptive Card rendering. Port 3978. Public (receives webhooks from Microsoft).
+3. **Pipeline Job** — Scheduled nightly job that pulls attendance data from Databricks, computes baselines and analytics, writes output files. The agent service reads these files. No AI calls needed.
 
 ## Prerequisites
 
-- Azure subscription: Container Apps, Key Vault, Bot Service
-- Microsoft 365 admin access (for Teams app upload)
-- Azure Container Registry
-- Secrets from the Presence dev team:
-  - `ANTHROPIC_API_KEY`
-  - `DATABRICKS_HOST`
-  - `DATABRICKS_TOKEN`
-  - `DATABRICKS_HTTP_PATH`
+- Azure subscription with permissions to create: Container Apps, Key Vault, Bot Service, Azure Files
+- Azure Container Registry (or any container registry)
+- Microsoft 365 admin access (for uploading custom Teams apps)
+
+## Credentials to Create
+
+**Do NOT use personal tokens for production.** Create dedicated service accounts:
+
+| Secret | What to create | Who creates it |
+|--------|---------------|----------------|
+| `ANTHROPIC_API_KEY` | Org-level API key at console.anthropic.com. Set spend limit (~$150/month is plenty). | Presence dev team or API admin |
+| `DATABRICKS_HOST` | Workspace hostname: `adb-1715711735713564.4.azuredatabricks.net` | Already known |
+| `DATABRICKS_TOKEN` | **Service principal PAT** — create a Databricks service principal with READ access to `dev_catalog.jf_salesforce_bronze.office_occupancy_o_365_verkada` and `dev_catalog.revenue_intelligence.workday_enhanced`. Do not use a personal token. | Databricks admin |
+| `DATABRICKS_HTTP_PATH` | SQL warehouse path: `/sql/1.0/warehouses/be160f1edb836d88` | Already known |
+| `BOT_APP_ID` | Microsoft Entra app registration (see Step 2) | DevOps |
+| `BOT_APP_PASSWORD` | Client secret from the Entra registration | DevOps |
 
 ## Step 1: Create Azure Key Vault
 
@@ -203,12 +213,15 @@ az containerapp exec --name presence-agent --resource-group rg-presence -- mkdir
 5. Ask "Who's showing up the most in Prague?" → verify leaderboard
 6. Ask "Who is traveling between offices?" → verify visitor data
 
-## Step 9: Create Access Group
+## Step 9: Create Access Group (Pilot)
+
+Starting with a small group:
 
 1. Azure Portal → Entra ID → Groups → New group
 2. Name: `SG-Presence-Users`
-3. Add pilot users
-4. App Setup Policy targets this group
+3. Add 3-5 pilot users (provided by Presence dev team)
+4. App Setup Policy targets this group — only these users see the bot
+5. After pilot feedback, expand the group for broader rollout
 
 ## Monitoring
 
