@@ -133,34 +133,16 @@ def _person_pattern(df, email):
     office_avg_days = sum(b.get("rate", 0) for b in office_dow_baselines.values()) if office_dow_baselines else 0
 
     return {
-        "person": {
-            "name": name,
-            "email": email,
-            "office": office,
-            "stream": stream,
-            "title": title,
-            "seniority": seniority,
-            "workday_matched": matched,
-        },
-        "attendance": {
-            "total_weekdays_present": total_weekdays,
-            "avg_days_per_week": round(avg_days_per_week, 1),
-            "trend": trend,
-            "avg_dwell_hours": avg_dwell,
-            "usual_arrival": _hour_to_time(avg_arrival),
-            "usual_departure": _hour_to_time(avg_departure),
-            "dow_pattern": dow_pattern,
-        },
-        "office_comparison": {
-            "office": office,
-            "office_pool": office_pool,
-            "office_avg_days_per_week": round(office_avg_days, 1),
-            "vs_office": f"{'+' if avg_days_per_week > office_avg_days else ''}{avg_days_per_week - office_avg_days:.1f} days/week vs office avg",
-        },
-        "weekly_history": [
-            {"week": str(r["date"].date()), "days": int(r["days"])}
-            for _, r in weeks.tail(8).iterrows()
-        ],
+        "name": name,
+        "office": office,
+        "role": stream,
+        "title": title,
+        "days_per_week": round(avg_days_per_week, 1),
+        "usual_arrival": _hour_to_time(avg_arrival),
+        "usual_departure": _hour_to_time(avg_departure),
+        "avg_dwell_hours": avg_dwell,
+        "days_they_come_in": dow_pattern,
+        "last_4_weeks": [int(r["days"]) for _, r in weeks.tail(4).iterrows()],
     }
 
 
@@ -243,18 +225,15 @@ def _trending(df, direction="trending_up"):
 
     return {
         "direction": direction,
-        "period": f"Last 2 weeks vs prior 4 weeks",
         "people": [
             {
                 "name": r["name"] if pd.notna(r["name"]) else r["email"],
                 "office": r["office"] if pd.notna(r["office"]) else "Unknown",
-                "stream": r["stream"] if pd.notna(r["stream"]) else "Unknown",
-                "recent_days_per_week": round(r["recent_per_week"], 1),
-                "prior_days_per_week": round(r["prior_per_week"], 1),
-                "delta": round(r["delta"], 1),
+                "was": f"{round(r['prior_per_week'], 1)} days/week",
+                "now": f"{round(r['recent_per_week'], 1)} days/week",
             }
             for _, r in top.iterrows()
-            if abs(r["delta"]) > 0.3  # Only show meaningful changes
+            if abs(r["delta"]) > 0.3
         ],
     }
 

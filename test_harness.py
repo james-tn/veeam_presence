@@ -67,7 +67,7 @@ def display_response(text):
             print(f"  [Card JSON saved to {card_file}]")
             # Display formatted
             print(f"\n  [{card.get('template', 'unknown')}] [{card.get('card_tone', 'default')}]")
-            print(f"  {card.get('headline', '')}")
+            print(f"  {card.get('summary', card.get('headline', ''))}")
             if card.get("body"):
                 print(f"  {card['body']}")
             for fact in card.get("facts", []):
