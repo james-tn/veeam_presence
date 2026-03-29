@@ -8,7 +8,7 @@ import json
 from cards.templates import (
     briefing_card, office_detail_card, leaderboard_card, person_card,
     comparison_card, trending_card, visitors_card, who_was_in_card,
-    welcome_card, error_card,
+    welcome_card, overview_card, error_card,
 )
 
 
@@ -43,6 +43,8 @@ def render_card(structured_response):
         return who_was_in_card(structured_response)
     elif template == "welcome":
         return welcome_card()
+    elif template == "overview":
+        return overview_card()
     elif template == "error":
         return error_card(structured_response.get("message", "An error occurred."))
     else:

@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from cards.templates import (
     briefing_card, office_detail_card, leaderboard_card, person_card,
     comparison_card, trending_card, visitors_card, who_was_in_card,
-    welcome_card, error_card,
+    welcome_card, overview_card, error_card,
 )
 
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "output", "card_samples")
@@ -156,7 +156,8 @@ samples = {
     "07_visitors": visitors_card(visitors_data),
     "08_who_was_in": who_was_in_card(who_was_in_data),
     "09_welcome": welcome_card(),
-    "10_error": error_card("Having trouble reaching the data warehouse. Usually resolves in a few minutes."),
+    "10_overview": overview_card(),
+    "11_error": error_card("Having trouble reaching the data warehouse. Usually resolves in a few minutes."),
 }
 
 for name, card in samples.items():

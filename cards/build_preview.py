@@ -11,11 +11,12 @@ from cards.generate_samples import (
 from cards.templates import (
     briefing_card, office_detail_card, leaderboard_card, person_card,
     comparison_card, trending_card, visitors_card, who_was_in_card,
-    welcome_card, error_card,
+    welcome_card, overview_card, error_card,
 )
 
 cards = [
     ("Welcome", welcome_card()),
+    ("What Can You Tell Me?", overview_card()),
     ("Daily Briefing", briefing_card(briefing_data)),
     ("Office Detail — Prague", office_detail_card(office_data)),
     ("Leaderboard — Atlanta", leaderboard_card(leaderboard_data)),

@@ -22,6 +22,16 @@ def _add_routing_hint(message):
     """
     lower = message.lower()
 
+    # Overview / what can you do
+    overview_words = ["what can you", "what do you", "what are you", "help me", "what should i ask",
+                      "capabilities", "what can i ask"]
+    if any(w in lower for w in overview_words):
+        return (f"[ROUTING: The user wants to know what you can do. "
+                f"Don't call any tool. Respond with a clear list of your capabilities: "
+                f"office attendance, leaderboards, individual patterns, cross-office travel, "
+                f"team coordination, manager impact, new hire integration, trends. "
+                f"Keep it short and end with 2-3 specific starter questions.]\n\n{message}")
+
     # Travel/visitor queries
     travel_words = ["travel", "traveling", "travelling", "visiting other", "between offices",
                     "cross-office", "who went to", "who visited"]

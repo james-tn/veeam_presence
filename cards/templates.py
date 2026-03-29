@@ -341,6 +341,60 @@ def welcome_card():
     )
 
 
+def overview_card():
+    """What can this agent do? Maps all capabilities."""
+    capabilities = [
+        {"type": "TextBlock", "text": "Here's what I can help with:", "size": "Small", "spacing": "Medium", "wrap": True},
+        {"type": "Container", "style": "Emphasis", "spacing": "Small", "items": [
+            {"type": "TextBlock", "text": "Office attendance", "weight": "Bolder", "size": "Small"},
+            {"type": "TextBlock", "text": "How many people are in each office, what's normal, which are busiest or quietest", "size": "Small", "spacing": "None", "wrap": True},
+        ]},
+        {"type": "Container", "style": "Emphasis", "spacing": "Small", "items": [
+            {"type": "TextBlock", "text": "Leaderboards", "weight": "Bolder", "size": "Small"},
+            {"type": "TextBlock", "text": "Who's coming in the most at each office — names, roles, how many days", "size": "Small", "spacing": "None", "wrap": True},
+        ]},
+        {"type": "Container", "style": "Emphasis", "spacing": "Small", "items": [
+            {"type": "TextBlock", "text": "Individual patterns", "weight": "Bolder", "size": "Small"},
+            {"type": "TextBlock", "text": "Any person's schedule — which days they come in, arrival time, days missed", "size": "Small", "spacing": "None", "wrap": True},
+        ]},
+        {"type": "Container", "style": "Emphasis", "spacing": "Small", "items": [
+            {"type": "TextBlock", "text": "Cross-office travel", "weight": "Bolder", "size": "Small"},
+            {"type": "TextBlock", "text": "Who's visiting other offices, which routes are busiest, recent trips", "size": "Small", "spacing": "None", "wrap": True},
+        ]},
+        {"type": "Container", "style": "Emphasis", "spacing": "Small", "items": [
+            {"type": "TextBlock", "text": "Team coordination", "weight": "Bolder", "size": "Small"},
+            {"type": "TextBlock", "text": "Are teams coming in on the same days or missing each other", "size": "Small", "spacing": "None", "wrap": True},
+        ]},
+        {"type": "Container", "style": "Emphasis", "spacing": "Small", "items": [
+            {"type": "TextBlock", "text": "Manager impact", "weight": "Bolder", "size": "Small"},
+            {"type": "TextBlock", "text": "Which managers' presence makes their team more likely to come in", "size": "Small", "spacing": "None", "wrap": True},
+        ]},
+        {"type": "Container", "style": "Emphasis", "spacing": "Small", "items": [
+            {"type": "TextBlock", "text": "New hire integration", "weight": "Bolder", "size": "Small"},
+            {"type": "TextBlock", "text": "Are recent hires establishing office rhythm or fading out", "size": "Small", "spacing": "None", "wrap": True},
+        ]},
+        {"type": "Container", "style": "Emphasis", "spacing": "Small", "items": [
+            {"type": "TextBlock", "text": "Trends and changes", "weight": "Bolder", "size": "Small"},
+            {"type": "TextBlock", "text": "Who's coming in more or less, which offices are getting quieter", "size": "Small", "spacing": "None", "wrap": True},
+        ]},
+        {"type": "TextBlock", "text": "17 offices · ~3,000 people · refreshed daily", "size": "Small", "isSubtle": True, "spacing": "Medium"},
+    ]
+
+    return _wrap(
+        body=[
+            {"type": "Container", "style": "Accent", "bleed": True, "items": [
+                {"type": "TextBlock", "text": "Veeam Presence", "weight": "Bolder", "size": "Large", "color": "Light"},
+                {"type": "TextBlock", "text": "Office attendance intelligence", "size": "Small", "color": "Light", "spacing": "None"},
+            ]},
+        ] + capabilities,
+        actions=_actions([
+            ("Daily briefing", "Give me the daily briefing"),
+            ("Leaderboard", "Who's showing up the most in Prague?"),
+            ("Who's traveling?", "Who is traveling between offices?"),
+        ]),
+    )
+
+
 def error_card(message):
     """Error state."""
     return _wrap(
