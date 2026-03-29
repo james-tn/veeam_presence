@@ -42,6 +42,33 @@ def _add_routing_hint(message):
         return (f"[ROUTING: This is about which offices are changing. You have this data. "
                 f"Call query_person with query_type='ghost' immediately.]\n\n{message}")
 
+    # Org leader rollups
+    org_words = ["org leader", "organization leader", "whose org", "leader's org",
+                 "john jester", "matthew bishop", "tim pfaelzer", "rehan jalil"]
+    if any(w in lower for w in org_words):
+        return (f"[ROUTING: This is about org leader attendance rollups. You have this data. "
+                f"Call query_person with query_type='org_leader'.]\n\n{message}")
+
+    # Manager gravity
+    gravity_words = ["manager gravity", "manager pull", "does the manager", "when the manager",
+                     "manager come in", "team follow"]
+    if any(w in lower for w in gravity_words):
+        return (f"[ROUTING: This is about manager gravity. You have this data. "
+                f"Call query_person with query_type='manager_gravity'.]\n\n{message}")
+
+    # New hires
+    hire_words = ["new hire", "new hires", "recent hire", "recently hired", "onboarding",
+                  "integrating", "integration"]
+    if any(w in lower for w in hire_words):
+        return (f"[ROUTING: This is about new hire integration. You have this data. "
+                f"Call query_person with query_type='new_hires'.]\n\n{message}")
+
+    # Weekend
+    weekend_words = ["weekend", "saturday", "sunday", "after hours"]
+    if any(w in lower for w in weekend_words):
+        return (f"[ROUTING: This is about weekend attendance. You have this data. "
+                f"Call query_person with query_type='weekend'.]\n\n{message}")
+
     return message
 
 

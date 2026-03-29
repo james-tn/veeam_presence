@@ -15,12 +15,17 @@ def enrich_with_workday(person_day_df, workday_df):
     wd["email"] = wd["email"].str.lower()
 
     # Select the columns we need from Workday
-    wd_cols = wd[[
+    wanted_cols = [
         "email", "preferred_name", "stream", "job_family", "job_family_group",
         "management_level", "ismanager", "manager_name", "manager_id",
         "supervisory_organization", "hire_date", "original_hire_date",
         "worker_status", "VX_Hierarchy", "businesstitle", "Employee_ID",
-    ]].copy()
+    ]
+    # Add org leader columns if present (v1.5)
+    for c in ["CF_EE_Org_Leader_1", "CF_EE_Org_Leader_2", "CF_EE_Org_Leader_3"]:
+        if c in wd.columns:
+            wanted_cols.append(c)
+    wd_cols = wd[[c for c in wanted_cols if c in wd.columns]].copy()
 
     # Deduplicate Workday (should be ~1:1 but just in case)
     wd_cols = wd_cols.drop_duplicates(subset=["email"], keep="first")

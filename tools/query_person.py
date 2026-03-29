@@ -69,6 +69,22 @@ def query_person(person=None, office=None, query_type=None):
     if query_type == "ghost":
         return _ghost_offices()
 
+    # --- v1.5: Org leader rollups ---
+    if query_type == "org_leader":
+        return _org_leaders(person)
+
+    # --- v1.5: Manager gravity ---
+    if query_type == "manager_gravity":
+        return _manager_gravity(office)
+
+    # --- v1.5: New hire integration ---
+    if query_type == "new_hires":
+        return _new_hires(office)
+
+    # --- v1.5: Weekend attendance ---
+    if query_type == "weekend":
+        return _weekend(office)
+
     # --- Person pattern ---
     if not person:
         return {"error": "Provide a person name/email or use query_type='who_was_in' with an office."}
@@ -306,6 +322,121 @@ def _team_sync(office=None):
     return result
 
 
+def _org_leaders(search=None):
+    """Org leader attendance rollups."""
+    path = os.path.join(config.DATA_DIR, "seniority.pkl")
+    if not os.path.exists(path):
+        return {"error": "Org leader data not available. Run the pipeline first."}
+    with open(path, "rb") as f:
+        data = pickle.load(f)
+
+    leaders = data.get("org_leaders", {})
+    if search:
+        # Filter to matching leader
+        search_lower = search.lower()
+        leaders = {k: v for k, v in leaders.items() if search_lower in k.lower()}
+
+    # Sort by people count
+    sorted_leaders = sorted(leaders.values(), key=lambda x: x.get("people", 0), reverse=True)
+
+    return {
+        "total_leaders": len(sorted_leaders),
+        "leaders": [
+            {"leader": l["leader"], "level": l["level"], "people": l["people"],
+             "offices": l["offices"], "avg_days_per_week": l["avg_days_per_week"],
+             "top_offices": l["top_offices"]}
+            for l in sorted_leaders[:15]
+        ],
+    }
+
+
+def _manager_gravity(office=None):
+    """Which managers pull their teams into the office?"""
+    path = os.path.join(config.DATA_DIR, "manager_gravity.pkl")
+    if not os.path.exists(path):
+        return {"error": "Manager gravity data not available. Run the pipeline first."}
+    with open(path, "rb") as f:
+        data = pickle.load(f)
+
+    if office:
+        from tools.query_office_intel import _match_office
+        matched = _match_office(office)
+        if matched:
+            data = {k: v for k, v in data.items() if v.get("office") == matched}
+
+    managers = sorted(data.values(), key=lambda x: x.get("gravity_score", 0), reverse=True)
+
+    strong_pull = [m for m in managers if m["gravity_score"] > 0.15]
+    no_effect = [m for m in managers if -0.1 <= m["gravity_score"] <= 0.1]
+
+    return {
+        "total_managers": len(managers),
+        "managers_with_strong_pull": len(strong_pull),
+        "managers_with_no_effect": len(no_effect),
+        "top_gravity": [
+            {"manager": m["manager"], "office": m["office"], "team_size": m["team_size"],
+             "team_in_when_mgr_in": f"{m['team_attendance_when_mgr_in']}%",
+             "team_in_when_mgr_out": f"{m['team_attendance_when_mgr_out']}%"}
+            for m in managers[:10]
+        ],
+    }
+
+
+def _new_hires(office=None):
+    """Are new hires establishing office rhythm?"""
+    path = os.path.join(config.DATA_DIR, "new_hires.pkl")
+    if not os.path.exists(path):
+        return {"error": "New hire data not available. Run the pipeline first."}
+    with open(path, "rb") as f:
+        data = pickle.load(f)
+
+    people = data.get("people", [])
+    if office:
+        from tools.query_office_intel import _match_office
+        matched = _match_office(office)
+        if matched:
+            people = [p for p in people if p.get("office") == matched]
+
+    return {
+        "total_new_hires": len(people),
+        "ramping_up": len([p for p in people if p["trend"] == "ramping up"]),
+        "steady": len([p for p in people if p["trend"] == "steady"]),
+        "fading": len([p for p in people if p["trend"] == "fading"]),
+        "people": [
+            {"name": p["name"], "office": p["office"], "role": p["role"],
+             "hired": p["hire_date"], "days_per_week": p["avg_days_per_week"],
+             "trend": p["trend"]}
+            for p in people[:15]
+        ],
+    }
+
+
+def _weekend(office=None):
+    """Weekend attendance — who's coming in on weekends?"""
+    path = os.path.join(config.DATA_DIR, "weekend.pkl")
+    if not os.path.exists(path):
+        return {"error": "Weekend data not available. Run the pipeline first."}
+    with open(path, "rb") as f:
+        data = pickle.load(f)
+
+    offices = data.get("offices", {})
+    if office:
+        from tools.query_office_intel import _match_office
+        matched = _match_office(office)
+        if matched and matched in offices:
+            return {"office": matched, **offices[matched]}
+        return {"error": f"No weekend data for {office}"}
+
+    return {
+        "total_weekend_people": data.get("total_weekend_people", 0),
+        "offices": [
+            {"office": name, "people": o["weekend_people"], "avg_per_day": o["avg_per_weekend_day"]}
+            for name, o in sorted(offices.items(), key=lambda x: x[1]["weekend_people"], reverse=True)
+            if o["weekend_people"] > 0
+        ],
+    }
+
+
 def _ghost_offices():
     """Which offices have multiple declining signals?"""
     sig_path = os.path.join(config.DATA_DIR, "signals.pkl")
@@ -327,7 +458,7 @@ def _ghost_offices():
 
 TOOL_SCHEMA = {
     "name": "query_person",
-    "description": "Get data about people and teams: individual attendance, who was in an office, trending up/down, cross-office travel (query_type='visitors'), team coordination (query_type='team_sync'), and which offices have changes (query_type='ghost').",
+    "description": "Get data about people and teams. Query types: pattern (person lookup), who_was_in (office attendees), trending_up/trending_down, visitors (cross-office travel), team_sync, ghost (declining offices), org_leader (org hierarchy rollups), manager_gravity (does manager presence pull team in?), new_hires (are new hires integrating?), weekend (weekend attendance).",
     "input_schema": {
         "type": "object",
         "properties": {
@@ -341,7 +472,7 @@ TOOL_SCHEMA = {
             },
             "query_type": {
                 "type": "string",
-                "enum": ["pattern", "who_was_in", "trending_up", "trending_down", "visitors", "team_sync", "ghost"],
+                "enum": ["pattern", "who_was_in", "trending_up", "trending_down", "visitors", "team_sync", "ghost", "org_leader", "manager_gravity", "new_hires", "weekend"],
                 "description": "Type of query. Default: 'pattern' for person queries, 'who_was_in' for office queries.",
             },
         },

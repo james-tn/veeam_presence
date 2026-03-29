@@ -19,6 +19,11 @@ from visitors import compute_visitors
 from team_sync import compute_team_sync
 from signals import compute_signals
 from chi import compute_chi
+from seniority import compute_seniority
+from manager_gravity import compute_manager_gravity
+from new_hires import compute_new_hire_integration
+from weekend import compute_weekend
+from mixing import compute_mixing
 
 
 def load_json_data(filepath, label=""):
@@ -115,6 +120,36 @@ def run_analytics():
     chi_data = compute_chi(enriched, baselines, anchors_data, team_sync_data, signals_data)
     with open(os.path.join(data_dir, "chi.pkl"), "wb") as f:
         pickle.dump(chi_data, f)
+
+    # Step 11: Seniority breakdowns + org leader rollups
+    print("\n[Step 11] Computing seniority breakdowns and org leader rollups...")
+    seniority_data = compute_seniority(enriched)
+    with open(os.path.join(data_dir, "seniority.pkl"), "wb") as f:
+        pickle.dump(seniority_data, f)
+
+    # Step 12: Manager gravity
+    print("\n[Step 12] Computing manager gravity scores...")
+    gravity_data = compute_manager_gravity(enriched)
+    with open(os.path.join(data_dir, "manager_gravity.pkl"), "wb") as f:
+        pickle.dump(gravity_data, f)
+
+    # Step 13: New hire integration
+    print("\n[Step 13] Computing new hire integration curves...")
+    new_hire_data = compute_new_hire_integration(enriched)
+    with open(os.path.join(data_dir, "new_hires.pkl"), "wb") as f:
+        pickle.dump(new_hire_data, f)
+
+    # Step 14: Weekend attendance
+    print("\n[Step 14] Computing weekend attendance...")
+    weekend_data = compute_weekend(enriched)
+    with open(os.path.join(data_dir, "weekend.pkl"), "wb") as f:
+        pickle.dump(weekend_data, f)
+
+    # Step 15: Cross-functional mixing
+    print("\n[Step 15] Computing cross-functional mixing scores...")
+    mixing_data = compute_mixing(enriched)
+    with open(os.path.join(data_dir, "mixing.pkl"), "wb") as f:
+        pickle.dump(mixing_data, f)
 
     # Summary
     elapsed = time.time() - start

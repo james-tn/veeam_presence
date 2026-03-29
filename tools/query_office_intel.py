@@ -17,8 +17,9 @@ def load_cache():
         _cache["personality"] = pickle.load(f)
     with open(os.path.join(data_dir, "anchors.pkl"), "rb") as f:
         _cache["anchors"] = pickle.load(f)
-    # Phase 2 data
-    for name in ("team_sync", "signals", "chi"):
+    # Phase 2 + v1.5 data
+    for name in ("team_sync", "signals", "chi", "seniority", "manager_gravity",
+                  "new_hires", "weekend", "mixing"):
         path = os.path.join(data_dir, f"{name}.pkl")
         if os.path.exists(path):
             with open(path, "rb") as f:
@@ -117,6 +118,27 @@ def query_office_intel(office=None):
             "teams_coming_in_same_days": len(office_teams) - len(low_sync),
             "teams_on_different_days": len(low_sync),
         }
+
+    # --- v1.5: Seniority breakdown ---
+    seniority = _cache.get("seniority", {}).get("office_seniority", {}).get(matched, {})
+    if seniority:
+        result["by_seniority"] = {
+            band: {"people": s["people"], "avg_days_per_week": s["avg_days_per_week"]}
+            for band, s in seniority.items()
+        }
+
+    # --- v1.5: Weekend attendance ---
+    weekend = _cache.get("weekend", {}).get("offices", {}).get(matched, {})
+    if weekend and weekend.get("weekend_people", 0) > 0:
+        result["weekend"] = {
+            "people_on_weekends": weekend["weekend_people"],
+            "avg_per_weekend_day": weekend["avg_per_weekend_day"],
+        }
+
+    # --- v1.5: Mixing score ---
+    mixing = _cache.get("mixing", {}).get(matched, {})
+    if mixing:
+        result["cross_functional_mix"] = f"{mixing.get('avg_streams_per_day', 0)} of {mixing.get('streams_present', 0)} teams present on a typical day"
 
     return result
 
