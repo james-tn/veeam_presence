@@ -323,11 +323,13 @@ def welcome_card():
                 {"type": "TextBlock", "text": "Veeam Presence", "weight": "Bolder", "size": "Large", "color": "Light"},
                 {"type": "TextBlock", "text": "Office attendance intelligence for leadership", "size": "Small", "color": "Light", "spacing": "None", "wrap": True},
             ]},
-            {"type": "TextBlock", "text": "I know who's coming into every Veeam office. Ask me about headcounts, leaderboards, trends, travel between offices, or individual patterns.", "wrap": True, "size": "Small", "spacing": "Medium"},
-            {"type": "FactSet", "facts": [
-                {"title": "Offices", "value": "17 worldwide"},
-                {"title": "People tracked", "value": "~3,000"},
-                {"title": "Data refresh", "value": "Daily"},
+            {"type": "TextBlock", "text": "I track daily attendance across every Veeam office worldwide. I can tell you how many people are in each office, who the regulars are, which teams are coordinating their days, who's traveling between offices, and how new hires are settling in.", "wrap": True, "size": "Small", "spacing": "Medium"},
+            {"type": "TextBlock", "text": "Just ask in plain language — I'll give you the numbers.", "size": "Small", "isSubtle": True, "spacing": "Small", "wrap": True},
+            {"type": "FactSet", "spacing": "Medium", "facts": [
+                {"title": "Offices", "value": "17 across Americas, EMEA, and APJ"},
+                {"title": "People", "value": "~3,000 tracked daily"},
+                {"title": "Coverage", "value": "Attendance, travel, team sync, new hires"},
+                {"title": "Refresh", "value": "Every morning"},
             ]},
         ],
         actions=[
