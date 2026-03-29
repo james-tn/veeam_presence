@@ -246,7 +246,7 @@ def _trending(df, direction="trending_up"):
 
 TOOL_SCHEMA = {
     "name": "query_person",
-    "description": "Get attendance data for an individual person, list who was in an office on the most recent day, or find people whose attendance is trending up or down. Use for person-level questions, 'who was in' questions, and trending queries.",
+    "description": "Get data about individual people. Use for: looking up a specific person's attendance pattern, listing who was in an office on the most recent day, or finding who's trending up/down. Only call this when the question is about specific people — for office-level questions use query_office_intel instead.",
     "input_schema": {
         "type": "object",
         "properties": {

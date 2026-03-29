@@ -73,21 +73,37 @@ def query_office_intel(office=None, metric=None):
     an = _cache["anchors"].get(matched, {})
 
     if metric in ("all", "baseline"):
-        # Compact role baselines — only send latest rate + deviation, not full DOW arrays
-        compact_roles = {}
+        latest = bl.get("latest", {})
+        pool = bl.get("active_pool", 0)
+        latest_hc = latest.get("headcount", 0)
+        latest_dow = latest.get("dow", 0)
+
+        # Convert DOW baselines to typical headcounts (not rates)
+        dow_names = {0: "Mon", 1: "Tue", 2: "Wed", 3: "Thu", 4: "Fri"}
+        typical_by_day = {}
+        for dow, bl_data in bl.get("dow_baselines", {}).items():
+            typical_by_day[dow_names.get(int(dow), str(dow))] = round(pool * bl_data.get("rate", 0))
+
+        # Role breakdowns as headcounts
+        role_headcounts = {}
         for stream, rb in bl.get("role_baselines", {}).items():
-            compact_roles[stream] = {
-                "pool": rb.get("pool", 0),
-                "latest_rate": rb.get("latest_rate", 0),
-                "deviation_pp": rb.get("deviation_pp", 0),
+            role_headcounts[stream] = {
+                "people_in": rb.get("latest_headcount", 0),
+                "typical": round(rb.get("pool", 0) * rb.get("dow_baselines", {}).get(latest_dow, 0.2)),
             }
-        result["baseline"] = {
-            "active_pool": bl.get("active_pool", 0),
-            "latest": bl.get("latest", {}),
-            "dow_baselines": bl.get("dow_baselines", {}),
-            "weekly_trend": bl.get("weekly_trend", [])[-4:],  # Last 4 weeks only
-            "role_baselines": compact_roles,
-            "seniority_baselines": bl.get("seniority_baselines", {}),
+
+        # Weekly trend as headcounts
+        weekly = [{"week": w["week"], "people": w["headcount"]} for w in bl.get("weekly_trend", [])[-4:]]
+
+        result["attendance"] = {
+            "people_in": latest_hc,
+            "date": latest.get("date", "unknown"),
+            "day": dow_names.get(latest_dow, "unknown"),
+            "typical_for_this_day": typical_by_day.get(dow_names.get(latest_dow, ""), 0),
+            "typical_by_day": typical_by_day,
+            "regulars": pool,
+            "by_role": role_headcounts,
+            "weekly_trend": weekly,
         }
 
     if metric in ("all", "personality"):
@@ -95,13 +111,9 @@ def query_office_intel(office=None, metric=None):
 
     if metric in ("all", "leaderboard"):
         result["leaderboard"] = {
-            "top_n": an.get("top_n", 10),
-            "size_class": an.get("size_class", "unknown"),
             "max_days_this_week": an.get("max_days_this_week", 5),
             "total_appeared_this_week": an.get("total_appeared_this_week", 0),
-            "entries": an.get("leaderboard", [])[:10],  # Card cap at 10
-            "erosion_rate": an.get("erosion_rate", 0),
-            "erosion_alert": an.get("erosion_alert", False),
+            "entries": an.get("leaderboard", [])[:10],
         }
 
     meta = config.OFFICES.get(matched, {})
@@ -140,11 +152,10 @@ def _global_summary():
         offices.append({
             "name": name,
             "region": config.OFFICES.get(name, {}).get("region", "Unknown"),
-            "pool": pool,
-            "headcount": hc,
-            "rate": rate,
-            "dev_pp": dev,
-            "erosion": an.get("erosion_alert", False),
+            "people_in": hc,
+            "typical": round(pool * bl.get("dow_baselines", {}).get(
+                bl.get("latest", {}).get("dow", 0), {}
+            ).get("rate", 0.2)),  # Typical headcount for this DOW
         })
 
     # Regional aggregation
@@ -163,15 +174,11 @@ def _global_summary():
         "type": "global_summary",
         "data_through": latest_date,
         "total_offices": len(offices),
-        "total_active_pool": total_pool,
-        "total_latest_headcount": total_latest_hc,
-        "global_rate": round(total_latest_hc / total_pool, 4) if total_pool > 0 else 0,
+        "total_people_in": total_latest_hc,
         "regions": {
             name: {
                 "offices": r["offices"],
-                "pool": r["pool"],
-                "headcount": r["headcount"],
-                "rate": round(r["headcount"] / r["pool"], 4) if r["pool"] > 0 else 0,
+                "people_in": r["headcount"],
             }
             for name, r in regions.items()
         },
@@ -182,7 +189,7 @@ def _global_summary():
 # Tool schema for Claude's tool_use
 TOOL_SCHEMA = {
     "name": "query_office_intel",
-    "description": "Get office intelligence: attendance baselines, personality profiles, leaderboards, and trends. Call with no office parameter for a global summary across all 17 offices. Call with an office name for deep detail on that office.",
+    "description": "Get office attendance data. Call with no office parameter for a summary of all 17 offices (headcounts and what's normal). Call with an office name for that office's details. ONE call is usually enough — don't call multiple times for the same question.",
     "input_schema": {
         "type": "object",
         "properties": {
