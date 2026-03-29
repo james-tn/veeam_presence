@@ -31,8 +31,9 @@ def briefing_card(data):
         # Column headers
         {"type": "ColumnSet", "spacing": "Medium", "columns": [
             _col("stretch", "Office", subtle=True),
-            _col("60px", "In", subtle=True, align="Right"),
-            _col("70px", "Typical", subtle=True, align="Right"),
+            _col("45px", "In", subtle=True, align="Right"),
+            _col("50px", "4wk avg", subtle=True, align="Right"),
+            _col("30px", "", subtle=True, align="Right"),
         ]},
     ]
 
@@ -40,15 +41,19 @@ def briefing_card(data):
     show = offices[:10]
     rest = offices[10:]
 
+    trend_icons = {"up": "↑", "down": "↓", "flat": "→"}
+    trend_colors = {"up": "Good", "down": "Attention", "flat": "Default"}
+
     for o in show:
-        diff = o["people_in"] - o["typical"]
-        color = "Good" if diff > 3 else ("Attention" if diff < -3 else "Default")
-        people_str = str(o["people_in"]) if o["people_in"] != 1 else "1"
+        trend = o.get("trend", "flat")
+        avg = o.get("avg", o["typical"])
+        people_str = str(o["people_in"])
 
         body.append({"type": "ColumnSet", "spacing": "None", "columns": [
             _col("stretch", o["name"], bold=o["people_in"] > 50),
-            _col("60px", people_str, align="Right", bold=True),
-            _col("70px", str(o["typical"]), align="Right", color=color),
+            _col("45px", people_str, align="Right", bold=True),
+            _col("50px", str(avg), align="Right"),
+            _col("30px", trend_icons.get(trend, "→"), align="Right", color=trend_colors.get(trend, "Default"), bold=True),
         ]})
 
     if rest:

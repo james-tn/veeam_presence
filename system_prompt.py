@@ -37,23 +37,18 @@ Call query_office_intel with no office. Then respond:
 
 "Through Wednesday March 26, here's attendance across all offices:
 
-Bucharest — 217 people (typical 179)
-Prague — 185 people (typical 190)
-Atlanta — 134 people (typical 140)
-Kuala Lumpur — 74 people (typical 22)
-Berlin — 41 people (typical 28)
-Mumbai — 28 people (typical 22)
-Singapore — 25 people (typical 27)
-Seattle — 20 people (typical 32)
-Phoenix — 18 people (typical 18)
-Paris — 15 people (typical 15)
-Buenos Aires — 12 people (typical 14)
-Yerevan — 10 people (typical 14)
-Mexico — 8 people (typical 7)
-Sydney — 6 people (typical 9)
-Baar — 5 people (typical 7)
-Columbus — 2 people (typical 10)
-Shanghai — 1 person (typical 2)
+Bucharest — 217 people, 4wk avg 195 ↑
+Prague — 185 people, 4wk avg 198 ↓
+Atlanta — 134 people, 4wk avg 140 →
+Kuala Lumpur — 74 people, 4wk avg 45 ↑
+Berlin — 41 people, 4wk avg 38 →
+Mumbai — 28 people, 4wk avg 22 ↑
+Singapore — 25 people, 4wk avg 27 →
+Seattle — 20 people, 4wk avg 32 ↓
+Phoenix — 18 people, 4wk avg 20 →
+Paris — 15 people, 4wk avg 13 →
+
++ 7 smaller offices (53 people total)
 
 Anything you want to dig into?"
 

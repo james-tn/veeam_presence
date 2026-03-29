@@ -157,17 +157,32 @@ def _global_summary():
         dow_bl = bl.get("dow_baselines", {}).get(latest_dow, {})
         typical = round(pool * dow_bl.get("rate", 0)) if dow_bl else 0
 
-        entry = {
+        # Average daily headcount from DOW baselines
+        dow_baselines = bl.get("dow_baselines", {})
+        daily_avgs = [pool * d.get("rate", 0) for d in dow_baselines.values()]
+        rolling_avg = round(sum(daily_avgs) / len(daily_avgs)) if daily_avgs else typical
+
+        # Trend from weekly unique people (direction indicator)
+        weekly = [w["headcount"] for w in bl.get("weekly_trend", [])[-4:]]
+        if len(weekly) >= 4:
+            recent = sum(weekly[-2:]) / 2
+            prior = sum(weekly[:2]) / 2
+            if recent > prior * 1.05:
+                trend = "up"
+            elif recent < prior * 0.95:
+                trend = "down"
+            else:
+                trend = "flat"
+        else:
+            trend = "flat"
+
+        offices.append({
             "name": name,
             "people_in": hc,
             "typical": typical,
-        }
-
-        chi = chi_data.get(name, {})
-        if chi:
-            entry["health_score"] = chi["chi"]
-
-        offices.append(entry)
+            "avg": rolling_avg,
+            "trend": trend,
+        })
 
     offices.sort(key=lambda x: x["people_in"], reverse=True)
 
