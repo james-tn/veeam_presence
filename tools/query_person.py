@@ -184,6 +184,14 @@ def _person_pattern(df, email):
 
     # Compute specific dates present and absent (excluding holidays)
     from pipeline.holidays_cal import get_workdays, get_holiday_name
+    if len(weekdays) == 0:
+        return {
+            "name": name, "office": office, "role": stream, "title": title,
+            "days_per_week": 0, "usual_arrival": "N/A", "usual_departure": "N/A",
+            "avg_dwell_hours": 0, "days_they_come_in": {}, "last_4_weeks": [],
+            "total_days_in": 0, "total_workdays": 0, "holidays_excluded": [],
+            "days_not_in": [],
+        }
     start = weekdays["date"].min()
     end = weekdays["date"].max()
     workdays_list = get_workdays(office, start, end)  # Business days minus holidays
@@ -286,7 +294,9 @@ def _trending(df, direction="trending_up"):
         prior_days=("date", "nunique"),
     ).reset_index()
 
-    merged = recent_stats.merge(prior_stats, on="email", how="outer").fillna(0)
+    merged = recent_stats.merge(prior_stats, on="email", how="outer")
+    merged["recent_days"] = merged["recent_days"].fillna(0)
+    merged["prior_days"] = merged["prior_days"].fillna(0)
     # Normalize to per-week (recent = 2 weeks, prior = 4 weeks)
     merged["recent_per_week"] = merged["recent_days"] / 2
     merged["prior_per_week"] = merged["prior_days"] / 4
