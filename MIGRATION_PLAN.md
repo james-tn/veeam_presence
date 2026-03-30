@@ -128,7 +128,6 @@ Replace the entire Anthropic SDK orchestration with the Microsoft Agent Framewor
 ```python
 """Veeam Presence — Microsoft Agent Framework orchestration with Azure OpenAI."""
 
-import asyncio
 from agent_framework.azure import AzureOpenAIChatClient
 from azure.identity import DefaultAzureCredential
 import config
@@ -163,7 +162,7 @@ def _add_routing_hint(message):
     return message
 
 
-def run_agent(user_message, history=None, conversation_id="default"):
+async def run_agent(user_message, history=None, conversation_id="default"):
     """Run one turn of the Presence agent. Returns (response_text, updated_history)."""
     agent = _get_agent()
     routed_message = _add_routing_hint(user_message)
@@ -174,7 +173,7 @@ def run_agent(user_message, history=None, conversation_id="default"):
     session = _sessions[conversation_id]
 
     # Framework handles tool dispatch + loop automatically
-    result = asyncio.run(agent.run(routed_message, session=session))
+    result = await agent.run(routed_message, session=session)
     response_text = result.text if hasattr(result, 'text') else str(result)
 
     # Maintain history for compatibility with app.py
@@ -188,7 +187,7 @@ def run_agent(user_message, history=None, conversation_id="default"):
 
 **What stays:** `_add_routing_hint()` (unchanged), `run_agent()` public API (same signature + `conversation_id`).
 
-**Async consideration:** `asyncio.run()` works from a sync context but will fail if already inside an async event loop (e.g., FastAPI async endpoint). If `app.py` uses `async def handle_message`, use `await agent.run(...)` instead.
+**Async note:** `run_agent()` is `async def` and uses `await agent.run(...)` directly. All FastAPI endpoints must also be `async def` to avoid event-loop conflicts.
 
 ### A6. `app.py` — Minor adjustments
 
@@ -629,7 +628,7 @@ Phase 12 is iterative prompt tuning.
 |------|----------|------------|
 | `agent-framework` v1.0.0rc5 is pre-GA | Medium | Pin exact version, keep old `agent.py` on branch for rollback |
 | GPT-5.3-chat tool-calling behavior differs from Claude | Medium | Routing hints + iterative prompt tuning in Phase 12 |
-| `asyncio.run()` conflict with FastAPI event loop | Medium | Make endpoints async, use `await agent.run(...)` directly |
+| Event-loop conflict if mixing sync/async | Low | All endpoints are `async def`, `run_agent()` uses `await` directly |
 | AgentSession state differs from current in-memory history | Low | Keep app.py's TTL/cleanup as a wrapper around sessions |
 | OIDC setup requires Entra admin access | Low | Either single-operator or split-responsibility model |
 | ACR build requires public network access | Low | Keep ACR public (same as reference repo pattern) |
