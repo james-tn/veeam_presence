@@ -30,6 +30,21 @@ async def on_message(turn_context: TurnContext):
     # Send typing indicator immediately
     await turn_context.send_activity(Activity(type=ActivityTypes.typing))
 
+    # Register user for proactive briefing (auto-register on first message)
+    try:
+        async with aiohttp.ClientSession() as reg_session:
+            await reg_session.post(
+                f"{AGENT_SERVICE_URL}/api/register_user",
+                json={
+                    "conversation_id": turn_context.activity.conversation.id,
+                    "user_id": turn_context.activity.from_property.id or "",
+                    "service_url": turn_context.activity.service_url or "",
+                },
+                timeout=aiohttp.ClientTimeout(total=2),
+            )
+    except Exception:
+        pass  # Non-critical — don't block the response
+
     user_text = turn_context.activity.text or ""
     conversation_id = turn_context.activity.conversation.id or "default"
 
@@ -75,6 +90,35 @@ async def on_message(turn_context: TurnContext):
         await turn_context.send_activity(text)
 
 
+async def proactive(req: web.Request) -> web.Response:
+    """Send a proactive message to a user (called by briefing scheduler)."""
+    try:
+        body = await req.json()
+        conversation_id = body.get("conversation_id")
+        text = body.get("text", "")
+
+        if not conversation_id or not text:
+            return web.json_response({"error": "Missing conversation_id or text"}, status=400)
+
+        # Build a conversation reference and send proactively
+        service_url = body.get("service_url", "https://smba.trafficmanager.net/teams/")
+        conversation_ref = {
+            "conversation": {"id": conversation_id},
+            "serviceUrl": service_url,
+            "bot": {"id": BOT_APP_ID},
+        }
+
+        async def send_callback(turn_context: TurnContext):
+            await turn_context.send_activity(text)
+
+        await adapter.continue_conversation(
+            conversation_ref, send_callback, BOT_APP_ID
+        )
+        return web.json_response({"status": "sent"})
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
+
 async def messages(req: web.Request) -> web.Response:
     """Main webhook endpoint for Teams/Copilot."""
     if "application/json" not in req.headers.get("Content-Type", ""):
@@ -98,6 +142,7 @@ async def health(req: web.Request) -> web.Response:
 
 app = web.Application()
 app.router.add_post("/api/messages", messages)
+app.router.add_post("/api/proactive", proactive)
 app.router.add_get("/health", health)
 
 if __name__ == "__main__":

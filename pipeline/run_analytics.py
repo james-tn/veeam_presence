@@ -24,6 +24,7 @@ from manager_gravity import compute_manager_gravity
 from new_hires import compute_new_hire_integration
 from weekend import compute_weekend
 from mixing import compute_mixing
+from pregenerate import pregenerate
 
 
 def load_json_data(filepath, label=""):
@@ -150,6 +151,12 @@ def run_analytics():
     mixing_data = compute_mixing(enriched)
     with open(os.path.join(data_dir, "mixing.pkl"), "wb") as f:
         pickle.dump(mixing_data, f)
+
+    # Step 16: Pre-generate common responses
+    print("\n[Step 16] Pre-generating common responses...")
+    pregen = pregenerate(baselines, profiles, anchors_data, visitors_data, team_sync_data, signals_data, chi_data)
+    with open(os.path.join(data_dir, "pregenerated.pkl"), "wb") as f:
+        pickle.dump(pregen, f)
 
     # Summary
     elapsed = time.time() - start

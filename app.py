@@ -20,6 +20,7 @@ import config
 from agent import run_agent
 from tools.query_office_intel import load_cache
 from tools.query_person import _load_enriched
+from response_cache import load_pregenerated, check_pregenerated, check_query_cache, store_query_cache
 
 # --- Logging ---
 logging.basicConfig(
@@ -50,6 +51,7 @@ async def lifespan(app):
     log.info("Loading Presence data caches...")
     load_cache()
     _load_enriched()
+    load_pregenerated()
     log.info("Caches loaded. Ready.")
     yield
 
@@ -73,6 +75,18 @@ async def stats():
         "errors": _stats["errors"],
         "active_conversations": len(_conversations),
     }
+
+
+@app.post("/api/register_user")
+async def register_user_endpoint(request: Request):
+    """Auto-register user for proactive briefing."""
+    try:
+        body = await request.json()
+        from proactive_briefing import register_user
+        register_user(body.get("conversation_id", ""), body.get("user_id", ""), body.get("service_url", ""))
+        return JSONResponse({"status": "registered"})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status=500)
 
 
 @app.post("/api/agent/message")
@@ -100,11 +114,24 @@ async def handle_message(request: Request):
     # Track usage
     _track_query(user_id)
 
-    # Get or create conversation state
+    # Layer 1: Check pre-generated cache (instant, no Claude call)
+    pregen_response = check_pregenerated(user_text)
+    if pregen_response:
+        elapsed = time.time() - start_time
+        log.info(f"QUERY user={user_id} text=\"{user_text[:80]}\" response=pregenerated time={elapsed:.3f}s")
+        return JSONResponse({"text": pregen_response, "card": None})
+
+    # Layer 2: Check short-TTL query cache (recent identical queries)
+    cached_response = check_query_cache(user_text)
+    if cached_response:
+        elapsed = time.time() - start_time
+        log.info(f"QUERY user={user_id} text=\"{user_text[:80]}\" response=cached time={elapsed:.3f}s")
+        return JSONResponse({"text": cached_response, "card": None})
+
+    # Layer 3: Call Claude (3-6 seconds)
     _cleanup_stale()
     conv = _conversations.get(conversation_id, {"history": [], "last_active": time.time()})
 
-    # Run agent
     try:
         response_text, history = run_agent(user_text, conv["history"])
     except Exception as e:
@@ -130,6 +157,9 @@ async def handle_message(request: Request):
             response_text = remaining_text or ""
     except Exception:
         pass
+
+    # Cache this response for 5 minutes
+    store_query_cache(user_text, response_text)
 
     elapsed = time.time() - start_time
     has_card = "card" if card else "text"
