@@ -11,6 +11,8 @@ COPY config.py .
 COPY app.py .
 COPY agent.py .
 COPY system_prompt.py .
+COPY response_cache.py .
+COPY proactive_briefing.py .
 COPY pipeline/ pipeline/
 COPY tools/ tools/
 COPY cards/ cards/

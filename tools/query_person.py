@@ -203,9 +203,9 @@ def _person_pattern(df, email):
     holidays_excluded = []
     for d in all_business:
         if d.date() not in workday_dates:
-            name = get_holiday_name(office, d.date())
-            if name:
-                holidays_excluded.append(f"{name} ({d.date()})")
+            holiday_name = get_holiday_name(office, d.date())
+            if holiday_name:
+                holidays_excluded.append(f"{holiday_name} ({d.date()})")
 
     # Absent days = workdays where person was not present (holidays already removed)
     dates_absent = sorted([d.date() for d in workdays_list if d.date() not in dates_present])

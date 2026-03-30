@@ -50,7 +50,7 @@ def check_pregenerated(user_message):
             office_name = key.split(":", 1)[1]
             if office_name in q or any(word in q for word in office_name.split()):
                 # Make sure it's an office question, not a person or leaderboard question
-                if "leaderboard" not in q and "top" not in q and "who" not in q:
+                if "leaderboard" not in q and "top" not in q and "who" not in q and "compare" not in q:
                     return response
 
     # Leaderboard matches

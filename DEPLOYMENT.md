@@ -201,11 +201,10 @@ az containerapp exec --name presence-agent --resource-group rg-presence -- mkdir
 1. Edit `appPackage/manifest.json`:
    - Set `id` to a new GUID
    - Set `botId` to the Gateway app registration ID
-2. Convert `appPackage/icon-color.svg` to `icon-color.png` (192x192)
-3. Convert `appPackage/icon-outline.svg` to `icon-outline.png` (32x32)
-4. Zip the appPackage directory (manifest.json + both PNGs)
-5. Teams Admin Center → Manage Apps → Upload custom app
-6. Create App Setup Policy → pin for `SG-Presence-Users` security group
+2. PNG icons are already in the directory (`icon-color.png` 192x192, `icon-outline.png` 32x32)
+3. Zip the appPackage directory (manifest.json + both PNGs)
+4. Teams Admin Center → Manage Apps → Upload custom app
+5. Assign to pilot users via App Setup Policy
 
 ## Step 8: Verify
 

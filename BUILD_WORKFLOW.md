@@ -20,7 +20,7 @@ Plus: **Pipeline Job** runs nightly, pulls from Databricks, computes baselines/s
 
 ## What Was Built
 
-### Pipeline (15 steps, ~60 seconds)
+### Pipeline (16 steps, ~60 seconds)
 1. Pull occupancy events from Databricks (PowerShell — Windows HTTP required)
 2. Aggregate to person-day (arrival, departure, dwell, office)
 3. Enrich with Workday (role, team, manager, seniority, name)

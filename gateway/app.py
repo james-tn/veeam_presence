@@ -15,7 +15,7 @@ from botbuilder.core import (
     BotFrameworkAdapterSettings,
     TurnContext,
 )
-from botbuilder.schema import Activity, ActivityTypes, Attachment
+from botbuilder.schema import Activity, ActivityTypes, Attachment, ConversationReference, ConversationAccount, ChannelAccount
 
 AGENT_SERVICE_URL = os.environ.get("AGENT_SERVICE_URL", "http://localhost:8000")
 BOT_APP_ID = os.environ.get("BOT_APP_ID", "")
@@ -100,13 +100,13 @@ async def proactive(req: web.Request) -> web.Response:
         if not conversation_id or not text:
             return web.json_response({"error": "Missing conversation_id or text"}, status=400)
 
-        # Build a conversation reference and send proactively
+        # Build a proper ConversationReference for proactive messaging
         service_url = body.get("service_url", "https://smba.trafficmanager.net/teams/")
-        conversation_ref = {
-            "conversation": {"id": conversation_id},
-            "serviceUrl": service_url,
-            "bot": {"id": BOT_APP_ID},
-        }
+        conversation_ref = ConversationReference(
+            conversation=ConversationAccount(id=conversation_id),
+            service_url=service_url,
+            bot=ChannelAccount(id=BOT_APP_ID),
+        )
 
         async def send_callback(turn_context: TurnContext):
             await turn_context.send_activity(text)

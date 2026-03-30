@@ -34,7 +34,7 @@ def render_card(structured_response):
     elif template == "person":
         return person_card(structured_response)
     elif template == "comparison":
-        return comparison_card(structured_response)
+        return comparison_card(structured_response.get("offices", []))
     elif template == "trending":
         return trending_card(structured_response)
     elif template == "visitors":
