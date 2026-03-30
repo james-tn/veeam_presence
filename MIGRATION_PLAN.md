@@ -1,43 +1,110 @@
 # Veeam Presence — Migration to Microsoft Agent Framework + Azure OpenAI + CI/CD
 
-## Why Microsoft Agent Framework Over Raw SDK
+## Current Anthropic SDK vs Microsoft Agent Framework
 
-The current codebase uses the Anthropic Python SDK with a hand-rolled tool-use loop
-in `agent.py` (178 lines). A direct port to the `openai` SDK would be the simplest
-path — the tool-use loop is only ~40 lines, the tool schemas are ~30 lines, and the
-whole thing works. For a short-term fix, a raw SDK swap is faster and lower risk.
+The current codebase uses the Anthropic Python SDK (`anthropic` package) with a hand-rolled
+tool-use loop in `agent.py` (178 lines). Below is a direct comparison of what we have today
+versus what we gain by moving to the Microsoft Agent Framework.
 
-We are choosing the Microsoft Agent Framework (`agent-framework` v1.0.0rc5) for
-**long-term** reasons:
+### What the Current Anthropic SDK Approach Looks Like
 
-| Factor | Raw `openai` SDK | Agent Framework |
-|--------|-------------------|-----------------|
-| **Tool-use loop** | Manual — you write the `while tool_calls` loop, dispatch, feed results back. Copy-paste across projects. | Automatic — `agent.run()` handles the full loop, dispatch, and result feeding. |
-| **Tool schemas** | Hand-maintained JSON dicts (`{"type": "function", "function": {...}}`). Must stay in sync with function signatures manually. | Auto-generated from Python type hints (`Annotated[str, Field(...)]`). Schema is the code. |
-| **Provider swap** | Locked to OpenAI/Azure OpenAI. Switching to Anthropic, Ollama, or Foundry means rewriting the loop, schema format, and response parsing. | Provider-agnostic. Swap `AzureOpenAIChatClient` → `AnthropicClient` or `OllamaClient` with zero tool or loop changes. |
-| **Session/state** | Roll your own conversation history, TTL, and cleanup. | Built-in `AgentSession` with `create_session()`, serialization, and service-managed history support. |
-| **Async** | Optional — you choose sync or async. | Async-first (`await agent.run()`). Aligns with our move to fully async FastAPI. |
-| **Middleware** | None — add logging, telemetry, rate limiting by hand. | Pluggable middleware pipeline for request/response interception, OpenTelemetry tracing built in. |
-| **Multi-agent** | Build from scratch. | Agent-as-tool composition (`agent.as_tool()`), graph-based workflows for orchestration. |
-| **MCP support** | None. | Native local and hosted MCP tool integration. |
-| **Maintenance** | Own the loop code forever. Every bug in dispatch, retry, or parsing is yours. | Microsoft-maintained. Bug fixes and new model support come from upstream. |
+```python
+# agent.py — current implementation (simplified)
+import anthropic
 
-**Trade-offs we accept:**
+client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+TOOLS = [OFFICE_SCHEMA, PERSON_SCHEMA]          # Hand-maintained JSON dicts
+TOOL_DISPATCH = {"query_office_intel": ..., "query_person": ...}
 
-- **Pre-GA risk** — v1.0.0rc5 may have breaking changes before 1.0. Mitigation: pin
-  exact version, keep old `agent.py` on a branch for rollback.
-- **Black-box dispatch** — tool calls happen inside the framework. Less visible during
-  debugging. Mitigation: middleware logging, OpenTelemetry traces.
-- **Extra dependency** — `agent-framework` pulls in `pydantic`, `openai`, and
-  framework internals. Our current `anthropic` dependency is lighter.
-- **Learning curve** — team must learn the `@tool` decorator, `AgentSession`, and
-  async patterns. This is a one-time cost.
+response = client.messages.create(
+    model="claude-sonnet-4-20250514",
+    system=SYSTEM_PROMPT,
+    tools=TOOLS,
+    messages=messages,
+)
 
-**Decision:** Use the Agent Framework. The 2-tool, 20-query/day profile of this
-project does not demand it today, but we are building for a platform that will grow
-in tools, providers, and agents. The framework investment pays off when we add MCP
-tools, multi-agent workflows, or need to swap providers without rewriting
-orchestration code.
+# Manual tool-use loop — developer writes and maintains this
+while response.stop_reason == "tool_use":
+    for block in response.content:
+        if block.type == "tool_use":
+            func = TOOL_DISPATCH[block.name]
+            result = func(**block.input)
+            # ... build tool_result message, append, re-call client.messages.create()
+
+# Manual routing hints — 65 lines of keyword matching to compensate for
+# model refusal on certain query types (travel, ghost, team sync, etc.)
+def _add_routing_hint(message):
+    if "travel" in message.lower():
+        return "[ROUTING: call query_person with query_type='visitors']\n\n" + message
+    # ... 8 keyword categories, each with its own word list and routing instruction
+```
+
+**Pain points with the current approach:**
+
+1. **Manual tool-use loop** (lines 125-165) — 40 lines of dispatch, result packaging, re-calling the API. Repeated in every project that uses tools.
+2. **Hand-maintained tool schemas** — JSON dicts in each tool file (`TOOL_SCHEMA`), manually kept in sync with function signatures. Drift causes silent failures.
+3. **Keyword routing workaround** (lines 21-85) — 65 lines of regex/keyword matching that prepends `[ROUTING: ...]` hints to user messages. Exists because Claude sometimes refuses to call tools for certain query patterns (e.g., "is Seattle dying?" doesn't trigger ghost detection). Brittle — every new query pattern needs new keywords.
+4. **Provider lock-in** — Anthropic SDK is Anthropic-only. Switching to Azure OpenAI means rewriting the loop, schema format, and response parsing.
+5. **No session management** — Conversation history is a plain list managed by `app.py` with manual TTL and trimming.
+6. **No middleware** — Logging, telemetry, and rate limiting are bolted on by hand.
+
+### What Agent Framework Replaces It With
+
+```python
+# agent.py — new implementation (simplified)
+from agent_framework.azure import AzureOpenAIChatClient
+from agent_framework import SkillsProvider
+from azure.identity import DefaultAzureCredential
+
+client = AzureOpenAIChatClient(
+    endpoint=config.AZURE_OPENAI_ENDPOINT,
+    deployment_name="gpt-5.3-chat",
+    credential=DefaultAzureCredential(),
+)
+
+agent = client.as_agent(
+    name="VeeamPresence",
+    instructions=SYSTEM_PROMPT,
+    tools=[tool_query_office_intel, tool_query_person],  # Python functions with type hints
+    context_providers=[skills_provider],                  # Progressive skill discovery
+)
+
+# One call — framework handles tool dispatch, result feeding, and multi-turn loop
+result = await agent.run(user_message, session=session)
+```
+
+### Side-by-Side Comparison
+
+| Aspect | Current: Anthropic SDK | New: Agent Framework |
+|--------|----------------------|---------------------|
+| **Tool-use loop** | Manual `while response.stop_reason == "tool_use"` — 40 lines of dispatch, result packaging, re-calling API | Automatic — `agent.run()` handles full loop internally |
+| **Tool schemas** | Hand-maintained JSON dicts (`TOOL_SCHEMA` per tool file, ~30 lines each). Must stay in sync with function signatures manually | Auto-generated from Python type hints (`Annotated[str, Field(...)]`). Schema is the code |
+| **Tool routing** | 65-line keyword matching function (`_add_routing_hint`) that injects `[ROUTING: ...]` into user messages. Brittle — misses synonyms, needs manual updates for each new query pattern | **Agent Skills** with progressive discovery. LLM reads skill catalog (name + description) and self-activates. Handles synonyms and novel phrasings via LLM reasoning |
+| **Provider** | Locked to Anthropic Claude. Response format, tool schema format, and stop_reason parsing are Anthropic-specific | Provider-agnostic. Swap `AzureOpenAIChatClient` → `AnthropicClient` or `OllamaClient` with zero tool or loop changes |
+| **Session/state** | Roll-your-own: plain list in `app.py`, manual 20-message trim, 30-min TTL cleanup | Built-in `AgentSession` with `create_session()`, framework-managed history, serialization |
+| **Async** | Sync only (`client.messages.create()`) — blocks the event loop in async FastAPI | Async-first (`await agent.run()`). Native alignment with async FastAPI |
+| **LLM model** | `claude-sonnet-4-20250514` (Anthropic hosted) | `gpt-5.3-chat` (Azure OpenAI, managed identity, no API key) |
+| **Auth** | `ANTHROPIC_API_KEY` env var (long-lived secret) | `DefaultAzureCredential` — managed identity in Azure, no stored API key |
+| **Middleware** | None — add logging by hand | Pluggable middleware pipeline, OpenTelemetry tracing built in |
+| **Multi-agent** | Build from scratch | Agent-as-tool composition (`agent.as_tool()`), graph-based workflows |
+| **MCP support** | None | Native local and hosted MCP tool integration |
+| **Lines eliminated** | — | ~130 lines (tool loop + schemas + routing hints) |
+
+### Trade-Offs We Accept
+
+- **Pre-GA risk** — `agent-framework` v1.0.0rc5 may have breaking changes before 1.0. Mitigation: pin exact version, keep old `agent.py` on a branch for rollback.
+- **Black-box dispatch** — tool calls happen inside the framework. Less visible during debugging. Mitigation: middleware logging, OpenTelemetry traces.
+- **Extra dependency** — `agent-framework` pulls in `pydantic`, `openai`, and framework internals. Our current `anthropic` dependency is lighter.
+- **Learning curve** — team must learn `SkillsProvider`, `AgentSession`, and async patterns. One-time cost.
+- **Skill description quality** — progressive skill discovery relies on LLM reading descriptions to decide activation. If descriptions are poorly written, the LLM may not activate the right skill. Mitigation: test with the 30-query comparison matrix.
+
+### Decision
+
+Use the Agent Framework. The investment pays off across three dimensions:
+
+1. **Immediate** — eliminates 130+ lines of hand-rolled tool dispatch, schema maintenance, and keyword routing
+2. **Medium-term** — progressive skill discovery handles novel query phrasings that keyword routing can never catch
+3. **Long-term** — provider-agnostic architecture, MCP support, and multi-agent composition as the platform grows
 
 ---
 
@@ -123,12 +190,13 @@ def tool_query_person(
 
 ### A5. `agent.py` — Full rewrite (core change)
 
-Replace the entire Anthropic SDK orchestration with the Microsoft Agent Framework. The framework handles the tool-use loop automatically via `agent.run()`.
+Replace the entire Anthropic SDK orchestration with the Microsoft Agent Framework. The framework handles the tool-use loop automatically via `agent.run()`. Keyword routing hints are replaced by Agent Skills with progressive discovery (see A10).
 
 ```python
 """Veeam Presence — Microsoft Agent Framework orchestration with Azure OpenAI."""
 
 from agent_framework.azure import AzureOpenAIChatClient
+from agent_framework import Skill, SkillsProvider
 from azure.identity import DefaultAzureCredential
 import config
 from system_prompt import SYSTEM_PROMPT
@@ -137,6 +205,103 @@ from tools.query_person import tool_query_person
 
 _agent = None
 _sessions = {}  # conversation_id -> AgentSession
+
+
+# --- Agent Skills (replaces _add_routing_hint keyword matching) ---
+# Each skill is a lightweight instruction package. The LLM sees only the name + description
+# in its system prompt (~50-100 tokens each). When a user query matches a description,
+# the LLM activates the skill via load_skill, which injects the full instructions.
+
+SKILLS = [
+    Skill(
+        name="office-intelligence",
+        description="Office headcounts, health scores, day-of-week patterns, and team breakdowns",
+        content=(
+            "Call tool_query_office_intel. Without an office name → global summary of all offices. "
+            "With an office name → that office's full detail including headcount, rate, deviation, "
+            "day-of-week pattern, top people, team breakdown, and health score."
+        ),
+    ),
+    Skill(
+        name="person-attendance",
+        description="Individual person's attendance pattern, schedule, presence history",
+        content=(
+            "Call tool_query_person with the person's name or email. Default query_type='pattern' "
+            "returns their attendance days, preferred days, dwell time, and trend."
+        ),
+    ),
+    Skill(
+        name="travel-visitors",
+        description="Cross-office travelers, visitors from other offices, who visited where",
+        content=(
+            "Call tool_query_person with query_type='visitors'. Optionally include office= to see "
+            "who visited that specific office. Returns list of visitors with home office, visit "
+            "dates, and frequency."
+        ),
+    ),
+    Skill(
+        name="team-sync",
+        description="Team coordination, overlapping days, when teams are in the office together",
+        content=(
+            "Call tool_query_person with query_type='team_sync'. Include office= to see team "
+            "overlap for a specific office. Returns team co-presence matrix and best overlap days."
+        ),
+    ),
+    Skill(
+        name="ghost-detection",
+        description="Declining offices, ghost offices, erosion signals, offices losing attendance",
+        content=(
+            "Call tool_query_person with query_type='ghost'. Returns offices with 3+ decay signals "
+            "(Friday erosion, peak ceiling drop, shape flattening, dwell compression). "
+            "Also works for questions like 'is X office dying?' or 'which offices are getting quieter?'"
+        ),
+    ),
+    Skill(
+        name="trending-attendance",
+        description="People trending up or down in office attendance, changing patterns",
+        content=(
+            "Call tool_query_person with query_type='trending_up' or 'trending_down'. "
+            "Optionally include office= to filter by location. Returns people whose attendance "
+            "has significantly changed in recent weeks."
+        ),
+    ),
+    Skill(
+        name="org-leader-rollup",
+        description="Organization leader attendance rollups, VP/executive org attendance",
+        content=(
+            "Call tool_query_person with query_type='org_leader'. Optionally include person= "
+            "with the leader's name. Returns attendance aggregated across the leader's full org tree."
+        ),
+    ),
+    Skill(
+        name="manager-gravity",
+        description="Manager pull effect, whether teams follow managers to the office",
+        content=(
+            "Call tool_query_person with query_type='manager_gravity'. Optionally include office=. "
+            "Returns correlation between manager presence and team attendance — does the team "
+            "come in more when the manager is there?"
+        ),
+    ),
+    Skill(
+        name="new-hires",
+        description="New hire onboarding attendance, recently hired employee integration patterns",
+        content=(
+            "Call tool_query_person with query_type='new_hires'. Optionally include office=. "
+            "Returns new hires (last 90 days) with their attendance frequency, comparing to "
+            "office norms. Flags under-integrated new hires."
+        ),
+    ),
+    Skill(
+        name="weekend-activity",
+        description="Weekend and after-hours badge activity, Saturday/Sunday attendance",
+        content=(
+            "Call tool_query_person with query_type='weekend'. Optionally include office=. "
+            "Returns weekend badge-in activity — who comes in on weekends and how often."
+        ),
+    ),
+]
+
+_skills_provider = SkillsProvider(skills=SKILLS)
 
 
 def _get_agent():
@@ -151,29 +316,22 @@ def _get_agent():
             name="VeeamPresence",
             instructions=SYSTEM_PROMPT,
             tools=[tool_query_office_intel, tool_query_person],
+            context_providers=[_skills_provider],
         )
     return _agent
-
-
-def _add_routing_hint(message):
-    """Keep existing routing hint logic unchanged."""
-    lower = message.lower()
-    # ... (all existing routing hint keyword matching stays as-is) ...
-    return message
 
 
 async def run_agent(user_message, history=None, conversation_id="default"):
     """Run one turn of the Presence agent. Returns (response_text, updated_history)."""
     agent = _get_agent()
-    routed_message = _add_routing_hint(user_message)
 
     # Get or create session for this conversation
     if conversation_id not in _sessions:
         _sessions[conversation_id] = agent.create_session()
     session = _sessions[conversation_id]
 
-    # Framework handles tool dispatch + loop automatically
-    result = await agent.run(routed_message, session=session)
+    # Framework handles tool dispatch + loop + skill activation automatically
+    result = await agent.run(user_message, session=session)
     response_text = result.text if hasattr(result, 'text') else str(result)
 
     # Maintain history for compatibility with app.py
@@ -183,17 +341,34 @@ async def run_agent(user_message, history=None, conversation_id="default"):
     return response_text, history
 ```
 
-**What disappears:** manual `client.messages.create()`, `while response.stop_reason == "tool_use"` loop, `TOOL_DISPATCH` dict, `TOOLS` list with schema dicts, manual tool result message construction. ~90 lines eliminated.
+**What disappears:**
+- Manual `client.messages.create()` call
+- `while response.stop_reason == "tool_use"` loop (40 lines)
+- `TOOL_DISPATCH` dict and `TOOLS` list with schema dicts
+- Manual tool result message construction
+- `_add_routing_hint()` function (65 lines of keyword matching)
+- Total: ~130 lines eliminated
 
-**What stays:** `_add_routing_hint()` (unchanged), `run_agent()` public API (same signature + `conversation_id`).
+**What's new:**
+- `SKILLS` list — 10 skill definitions with name, description, and activation instructions
+- `SkillsProvider` — injects skill catalog into system prompt, exposes `load_skill` tool
+- Progressive discovery — LLM sees ~500 tokens of skill catalog, loads full instructions on demand
 
-**Async note:** `run_agent()` is `async def` and uses `await agent.run(...)` directly. All FastAPI endpoints must also be `async def` to avoid event-loop conflicts.
+**How skills replace keyword routing:**
+
+| Keyword routing (old) | Agent Skills (new) |
+|---|---|
+| Developer writes regex: `"ghost", "declining", "dying"` | Developer writes description: `"Declining offices, ghost offices, erosion signals"` |
+| Misses synonyms: "is Seattle fading?" → no match | LLM reasons: "fading" ≈ "declining" → activates ghost-detection skill |
+| Prepends `[ROUTING: call query_person...]` to message | Skill content instructs: `"Call tool_query_person with query_type='ghost'"` |
+| New query patterns need code changes | New patterns handled by LLM generalization |
+| 65 lines of keyword/routing code | 0 lines of routing code (descriptions are config, not logic) |
 
 ### A6. `app.py` — Minor adjustments
 
-- Pass `conversation_id` to `run_agent()`:
+- Pass `conversation_id` to `run_agent()` and `await` it:
   ```python
-  response_text, conv["history"] = run_agent(user_text, conv["history"], conversation_id=conversation_id)
+  response_text, conv["history"] = await run_agent(user_text, conv["history"], conversation_id=conversation_id)
   ```
 - Add session cleanup in `_cleanup_stale()` to also evict `_sessions` entries:
   ```python
@@ -207,7 +382,8 @@ async def run_agent(user_message, history=None, conversation_id="default"):
 The prompt is a plain string usable by any LLM. However:
 - GPT models may need stronger "ALWAYS call a tool" reinforcement
 - Tone may drift (GPT tends to be more verbose)
-- Test and iterate after structural migration
+- The skills system provides implicit routing guidance, reducing the prompt's burden for tool-call coercion
+- Test and iterate after structural migration using the 30-query comparison matrix
 
 ### A8. `test_harness.py` — Update credential check
 
@@ -217,7 +393,67 @@ Replace `ANTHROPIC_API_KEY` check with `AZURE_OPENAI_ENDPOINT`.
 
 - Remove `TOOL_SCHEMA` shape tests (no more schema dicts)
 - Add import test for `agent_framework`
+- Add test that `SKILLS` list is non-empty and each skill has name + description
 - Update Dockerfile reference tests
+
+### A10. Agent Skills — Progressive Skill Discovery (replaces keyword routing)
+
+This is the key architectural change beyond the SDK swap. The current `_add_routing_hint()` function (65 lines of keyword matching in `agent.py`) is replaced by Agent Skills with progressive discovery.
+
+#### Problem Being Solved
+
+LLMs sometimes refuse to call tools for queries that seem conversational but actually require data lookup. Example: "is the Seattle office dying?" — Claude sees no explicit data question and responds conversationally instead of calling `query_person(query_type='ghost')`.
+
+The current workaround is keyword matching that injects routing hints into the user message before the LLM sees it. This is brittle (misses synonyms), requires developer maintenance, and can't generalize to novel phrasings.
+
+#### How Agent Skills Work
+
+Agent Skills use a 3-tier progressive loading pattern:
+
+```
+Tier 1 — Catalog (always in system prompt, ~50-100 tokens/skill):
+  "ghost-detection: Declining offices, ghost offices, erosion signals, offices losing attendance"
+
+Tier 2 — Load (injected when LLM activates skill via load_skill tool):
+  "Call tool_query_person with query_type='ghost'. Returns offices with 3+ decay signals..."
+
+Tier 3 — Resources (loaded on demand via read_skill_resource):
+  Additional context, example queries, output format templates
+```
+
+**Activation flow:**
+
+1. LLM receives user message: "is Seattle dying?"
+2. LLM sees skill catalog in system prompt → matches "ghost-detection" description
+3. LLM calls `load_skill("ghost-detection")` → receives full instructions
+4. Instructions say: call `tool_query_person` with `query_type='ghost'`
+5. LLM calls the tool with correct parameters
+
+The key difference: keyword routing uses **developer-maintained pattern matching** (if "dying" in message → inject hint). Skills use **LLM reasoning over descriptions** ("dying" ≈ "declining offices, erosion signals" → activate skill). The LLM generalizes to novel phrasings that keyword matching would miss.
+
+#### Skill Inventory
+
+| Skill Name | Description (what LLM sees in catalog) | Replaces Routing Keywords |
+|---|---|---|
+| `office-intelligence` | Office headcounts, health scores, day-of-week patterns, team breakdowns | `office`, `headcount`, `health` |
+| `person-attendance` | Individual person's attendance pattern, schedule, presence history | person names, `pattern` |
+| `travel-visitors` | Cross-office travelers, visitors from other offices | `travel`, `visiting`, `between offices` |
+| `team-sync` | Team coordination, overlapping days, teams in office together | `team sync`, `overlapping`, `same days` |
+| `ghost-detection` | Declining offices, ghost offices, erosion signals | `ghost`, `declining`, `dying`, `going quiet` |
+| `trending-attendance` | People trending up or down in office attendance | `trending`, `more`, `less` |
+| `org-leader-rollup` | Organization leader attendance rollups, VP/exec org | `org leader`, specific exec names |
+| `manager-gravity` | Manager pull effect, teams following managers | `manager gravity`, `manager pull` |
+| `new-hires` | New hire onboarding attendance, integration patterns | `new hire`, `onboarding` |
+| `weekend-activity` | Weekend and after-hours badge activity | `weekend`, `saturday`, `sunday` |
+
+**Token budget:** 10 skills × ~50 tokens/description = ~500 tokens added to system prompt. Compared to the current routing hint approach (which adds ~50-100 tokens per matched message), this is a fixed one-time cost with better coverage.
+
+#### Fallback Strategy
+
+If skill-based activation proves unreliable for specific query patterns during testing (Phase 12), we can:
+1. Improve skill descriptions (first line of defense)
+2. Add reinforcement in `system_prompt.py`: "When asked about declining offices, use the ghost-detection skill"
+3. As a last resort, keep a minimal `_add_routing_hint()` for the few hardest cases — but the goal is zero keyword routing
 
 ---
 
@@ -604,21 +840,22 @@ Note: For local dev without managed identity, `AZURE_OPENAI_API_KEY` is accepted
 | 0 | Branch baseline | — | `python tests/integration_test.py` passes |
 | 1 | Config + deps | `config.py`, `requirements.txt` | `python -c "import config"` |
 | 2 | Tool wrappers | `tools/query_office_intel.py`, `tools/query_person.py` | Import test |
-| 3 | Agent rewrite | `agent.py` | `python test_harness.py` with 15+ queries |
-| 4 | App wiring | `app.py` | End-to-end via test harness |
-| 5 | Tests update | `tests/integration_test.py`, `test_harness.py` | Test suite passes |
-| 6 | Docker updates | `Dockerfile`, `docker-compose.yml` | `docker-compose build` |
-| 7 | CI workflow | `.github/workflows/ci.yml` | Push to `dev` triggers CI |
-| 8 | Infra scripts | `infra/scripts/*`, `infra/bicep/foundation.bicep` | `bash -n` validation |
-| 9 | Deploy workflows | `.github/workflows/deploy-*.yml` | Integration deploy succeeds |
-| 10 | OIDC setup | `infra/scripts/setup-github-oidc.sh` + Entra config | `az login --federated-token` |
-| 11 | Bootstrap | `infra/scripts/bootstrap-azure.sh` | Foundation resources created |
-| 12 | Prompt tuning | `system_prompt.py`, `agent.py` routing hints | 30-query comparison matrix |
-| 13 | DEPLOYMENT.md | `DEPLOYMENT.md` | Documentation review |
+| 3 | Agent Skills | `agent.py` (SKILLS list + SkillsProvider) | Skill import test |
+| 4 | Agent rewrite | `agent.py` (full rewrite) | `python test_harness.py` with 15+ queries |
+| 5 | App wiring | `app.py` | End-to-end via test harness |
+| 6 | Tests update | `tests/integration_test.py`, `test_harness.py` | Test suite passes |
+| 7 | Docker updates | `Dockerfile`, `docker-compose.yml` | `docker-compose build` |
+| 8 | CI workflow | `.github/workflows/ci.yml` | Push to `dev` triggers CI |
+| 9 | Infra scripts | `infra/scripts/*`, `infra/bicep/foundation.bicep` | `bash -n` validation |
+| 10 | Deploy workflows | `.github/workflows/deploy-*.yml` | Integration deploy succeeds |
+| 11 | OIDC setup | `infra/scripts/setup-github-oidc.sh` + Entra config | `az login --federated-token` |
+| 12 | Bootstrap | `infra/scripts/bootstrap-azure.sh` | Foundation resources created |
+| 13 | Skill tuning | `agent.py` skill descriptions, `system_prompt.py` | 30-query comparison matrix |
+| 14 | DEPLOYMENT.md | `DEPLOYMENT.md` | Documentation review |
 
-Phases 1-6 are the code migration (can be done locally).
-Phases 7-11 are the CI/CD infrastructure (requires Azure + GitHub setup).
-Phase 12 is iterative prompt tuning.
+Phases 1-7 are the code migration (can be done locally).
+Phases 8-12 are the CI/CD infrastructure (requires Azure + GitHub setup).
+Phase 13 is iterative skill description tuning (replaces "prompt tuning" — the descriptions are the new tuning surface).
 
 ---
 
@@ -627,9 +864,11 @@ Phase 12 is iterative prompt tuning.
 | Risk | Severity | Mitigation |
 |------|----------|------------|
 | `agent-framework` v1.0.0rc5 is pre-GA | Medium | Pin exact version, keep old `agent.py` on branch for rollback |
-| GPT-5.3-chat tool-calling behavior differs from Claude | Medium | Routing hints + iterative prompt tuning in Phase 12 |
+| GPT-5.3-chat tool-calling behavior differs from Claude | Medium | Agent Skills provide implicit routing; skill descriptions tuned in Phase 13 |
+| Skill descriptions don't cover edge-case queries | Medium | 30-query comparison matrix in Phase 13. Fallback: add reinforcement in system prompt or minimal keyword routing for hardest cases |
 | Event-loop conflict if mixing sync/async | Low | All endpoints are `async def`, `run_agent()` uses `await` directly |
 | AgentSession state differs from current in-memory history | Low | Keep app.py's TTL/cleanup as a wrapper around sessions |
+| Progressive discovery adds latency (2 LLM calls for skill activation) | Low | Skill load is fast (~100ms); total latency increase is marginal vs 3-6s LLM call. Pre-generated cache layer still serves instant responses for common queries |
 | OIDC setup requires Entra admin access | Low | Either single-operator or split-responsibility model |
 | ACR build requires public network access | Low | Keep ACR public (same as reference repo pattern) |
 | gpt-5.3-chat may not be available in all Azure regions | Low | Set `AZURE_OPENAI_CHAT_DEPLOYMENT_NAME` as configurable override |
