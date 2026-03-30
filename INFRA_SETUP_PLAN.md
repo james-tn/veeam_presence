@@ -74,12 +74,98 @@ after OIDC setup (1.4) and after bootstrap (Phase 2).
 | `teams-catalog-admin` | Manual only | Required (M365 admin) |
 | `bootstrap-foundation` | Manual only | Required (infra team) |
 
-### 1.4 Azure OIDC Setup (Federated Credentials)
+### 1.4 OIDC Authentication (Azure to GitHub Actions)
 
-Create Entra app registrations so GitHub Actions authenticates without stored secrets.
-Run these with an account that has `Application Administrator` or `Cloud Application Administrator` role.
+#### How It Works
 
-#### Integration Identity
+Traditional CI/CD stores long-lived Azure credentials (client secret or certificate)
+as GitHub secrets. OIDC eliminates this — no Azure secrets are stored in GitHub at all.
+
+The flow for every workflow run:
+
+```
+GitHub Actions runner                    Entra ID (Azure AD)
+       |                                        |
+  1.   |-- requests OIDC token from GitHub ----->|
+       |   (contains: repo, branch, env name)   |
+       |                                        |
+  2.   |<--- GitHub issues signed JWT ----------|
+       |   (signed by GitHub's OIDC provider)   |
+       |                                        |
+  3.   |-- presents JWT to Entra ID ----------->|
+       |   "I am repo:Veeam.../Veeam_Presence  |
+       |    running in environment:integration" |
+       |                                        |
+  4.   |   Entra ID validates:                  |
+       |   - JWT signature (GitHub's public key)|
+       |   - issuer = token.actions.github...   |
+       |   - subject matches federated cred     |
+       |   - audience = api://AzureADToken...   |
+       |                                        |
+  5.   |<--- returns Azure access token --------|
+       |   (scoped to the service principal's   |
+       |    RBAC assignments)                   |
+       |                                        |
+  6.   |-- uses Azure token for az CLI, ------->|  Azure Resources
+       |   ACR push, ACA deploy, etc.           |
+```
+
+**Key security properties:**
+- **No stored secrets** — nothing to rotate, nothing to leak
+- **Environment-scoped** — the `integration` identity can ONLY be used by workflows
+  running in the `integration` GitHub environment (which is branch-locked to the
+  `integration` branch). A feature branch cannot impersonate integration.
+- **Short-lived** — tokens expire in minutes, not months
+- **Auditable** — every token exchange appears in Entra ID sign-in logs
+
+#### In the Workflows
+
+Every deploy workflow uses `azure/login@v3` with OIDC. The workflow must declare
+`permissions: id-token: write` to request the GitHub OIDC token:
+
+```yaml
+permissions:
+  contents: read
+  id-token: write      # required for OIDC
+
+steps:
+  - uses: azure/login@v3
+    with:
+      client-id: ${{ vars.AZURE_CLIENT_ID }}       # from GitHub environment variable
+      tenant-id: ${{ vars.AZURE_TENANT_ID }}        # from GitHub environment variable
+      subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}  # from GitHub environment variable
+      # No client-secret — OIDC handles authentication
+```
+
+After this step, all subsequent `az` CLI commands and Azure SDK calls in the workflow
+are authenticated as the service principal.
+
+#### Identity-to-Environment Mapping
+
+Each GitHub environment maps to a dedicated Entra app registration. This is the
+trust boundary — the federated credential's `subject` filter locks the identity
+to a specific repo + environment combination.
+
+| GitHub Environment | Entra App Display Name | Subject Filter | RBAC |
+|---|---|---|---|
+| `integration` | `gh-presence-integration` | `repo:Veeam-CT-RevenueIntelligence/Veeam_Presence:environment:integration` | Contributor + AcrPush + KV Secrets User |
+| `production` | `gh-presence-production` | `repo:Veeam-CT-RevenueIntelligence/Veeam_Presence:environment:production` | Contributor + KV Secrets User (no AcrPush) |
+| `bootstrap-foundation` | `gh-presence-bootstrap-foundation` (optional) | `repo:Veeam-CT-RevenueIntelligence/Veeam_Presence:environment:bootstrap-foundation` | Contributor |
+
+Production intentionally has **no `AcrPush`** — it pulls images that were already
+built and tested in integration. This prevents production workflows from
+modifying container images.
+
+#### Prerequisites
+
+The person running the OIDC setup commands needs:
+- **Entra ID role:** `Application Administrator` or `Cloud Application Administrator`
+- **Azure RBAC:** `User Access Administrator` or `Owner` on the target resource group
+  (to assign roles to the new service principals)
+
+#### Creating the Identities
+
+##### Integration Identity
 
 ```bash
 # Create app registration
@@ -106,7 +192,7 @@ az role assignment create --assignee <app-id> --role "Contributor" \
 > **Note:** `AcrPush` and `Key Vault Secrets User` roles are granted AFTER bootstrap
 > creates those resources (see Phase 2 post-bootstrap steps).
 
-#### Production Identity
+##### Production Identity
 
 ```bash
 az ad app create --display-name "gh-presence-production"
@@ -125,7 +211,7 @@ az role assignment create --assignee <app-id> --role "Contributor" \
   --scope "/subscriptions/<sub-id>/resourceGroups/<rg-prod>"
 ```
 
-#### Bootstrap Identity (Optional)
+##### Bootstrap Identity (Optional)
 
 Can reuse the integration identity for initial setup, or create a dedicated one:
 
