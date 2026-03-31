@@ -62,7 +62,7 @@ class TestQueryPerson:
 
     def test_person_pattern(self):
         from tools.query_person import query_person
-        result = query_person(person="Roman Sakov")
+        result = query_person(person="Jan Novak")
         assert "error" not in result
         assert "days_per_week" in result
         assert "usual_arrival" in result
@@ -128,7 +128,7 @@ class TestQueryPerson:
 
     def test_typed_wrapper_returns_json_string(self):
         from tools.query_person import tool_query_person
-        result = tool_query_person(person="Roman Sakov")
+        result = tool_query_person(person="Jan Novak")
         parsed = json.loads(result)
         assert "error" not in parsed
         assert "days_per_week" in parsed

@@ -3,11 +3,11 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-# Skip tests that require microsoft_agents if not installed
+# Skip tests that require microsoft_agents.hosting.fastapi if not installed
 try:
-    import microsoft_agents
+    import microsoft_agents.hosting.fastapi  # noqa: F401
     _HAS_MS_AGENTS = True
-except ImportError:
+except (ImportError, ModuleNotFoundError):
     _HAS_MS_AGENTS = False
 
 ms_agents_required = pytest.mark.skipif(
