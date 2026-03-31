@@ -128,7 +128,8 @@ async def _send_proactive(
         logger.error("Cannot send proactive message: no cloud adapter")
         return
 
-    conversation_ref = TurnContext.get_conversation_reference(turn_context.activity)
+    reference = turn_context.activity.get_conversation_reference()
+    continuation_activity = reference.get_continuation_activity()
 
     async def _callback(ctx: TurnContext) -> None:
         await ctx.send_activity(reply)
@@ -136,9 +137,9 @@ async def _send_proactive(
     for attempt in range(1, CHANNEL_SEND_MAX_ATTEMPTS + 1):
         try:
             await adapter.continue_conversation(
-                conversation_ref,
-                _callback,
                 _runtime.agent_app.app_id,
+                continuation_activity,
+                _callback,
             )
             return
         except Exception as exc:
