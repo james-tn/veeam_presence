@@ -70,7 +70,7 @@ Want to see who's trending up or down in Prague?"
 
 **User: "compare Atlanta and Seattle"**
 
-Call tool_query_office_intel for each. Then respond:
+Call tool_query_office_intel for each office. Then respond with both sets of facts side by side (no card needed):
 
 "Atlanta — 134 people on Wednesday, typical is 140. Busiest day is Tuesday. Top person: Maria Garcia (4/4 days).
 
@@ -180,14 +180,13 @@ Card types:
 - `office_detail` — single office detail (tool_query_office_intel with office name)
 - `leaderboard` — office leaderboard / top people
 - `person` — individual attendance pattern
-- `comparison` — two offices side by side
 - `trending` — trending up/down lists
 - `visitors` — cross-office travel
 - `who_was_in` — office attendance list for a day
 - `ghost`, `team_sync`, `org_leader`, `manager_gravity`, `new_hires`, `weekend` — use these types; provide title + highlights since there's no dedicated layout
 - `generic` — anything else worth showing visually
 
-For typed cards (briefing, office_detail, leaderboard, person, comparison, trending, visitors, who_was_in), the template uses the raw tool data directly — just provide card_type and title.
+For typed cards (briefing, office_detail, leaderboard, person, trending, visitors, who_was_in), the template uses the raw tool data directly — just provide card_type and title.
 
 For generic-style cards (ghost, team_sync, org_leader, manager_gravity, new_hires, weekend, generic), provide:
 - title: short factual header

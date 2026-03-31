@@ -12,7 +12,7 @@ import logging
 from typing import Any
 
 from fastapi import FastAPI, Request
-from microsoft_agents.activity import Activity, ActivityTypes
+from microsoft_agents.activity import Activity, ActivityTypes, Attachment
 from microsoft_agents.hosting.core import AgentApplication, ApplicationOptions, Authorization, MemoryStorage
 from microsoft_agents.hosting.core.turn_context import TurnContext
 from microsoft_agents.hosting.fastapi import CloudAdapter, JwtAuthorizationMiddleware, start_agent_process
@@ -102,12 +102,12 @@ class WrapperRuntime:
 _runtime = WrapperRuntime()
 
 
-def _build_card_attachment(card_json: dict) -> dict:
-    """Wrap an Adaptive Card dict as a Teams attachment."""
-    return {
-        "contentType": "application/vnd.microsoft.card.adaptive",
-        "content": card_json,
-    }
+def _build_card_attachment(card_json: dict) -> Attachment:
+    """Wrap an Adaptive Card dict as a Teams Attachment."""
+    return Attachment(
+        content_type="application/vnd.microsoft.card.adaptive",
+        content=card_json,
+    )
 
 
 async def _send_proactive(

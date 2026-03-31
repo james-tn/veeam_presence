@@ -88,11 +88,11 @@ def query_person(person=None, office=None, query_type=None):
 
     # --- Trending up/down across all offices ---
     if query_type in ("trending_up", "trending_down"):
-        return _trending(df, direction=query_type)
+        return _trending(df, direction=query_type, office=office)
 
     # --- Cross-office travel ---
     if query_type == "visitors":
-        return _visitors()
+        return _visitors(office)
 
     # --- Team sync ---
     if query_type == "team_sync":
@@ -274,9 +274,17 @@ def _who_was_in(df, office):
     }
 
 
-def _trending(df, direction="trending_up"):
+def _trending(df, direction="trending_up", office=None):
     """Find people with biggest attendance changes (up or down)."""
     weekdays = df[df["dow"] <= 4].copy()
+
+    if office:
+        from tools.query_office_intel import _match_office
+        matched = _match_office(office)
+        if not matched:
+            return {"error": f"Office '{office}' not found. Check spelling or try a different name."}
+        weekdays = weekdays[weekdays["office"] == matched]
+
     max_date = weekdays["date"].max()
 
     recent = weekdays[weekdays["date"] >= max_date - pd.Timedelta(weeks=2)]
@@ -322,13 +330,26 @@ def _trending(df, direction="trending_up"):
     }
 
 
-def _visitors():
+def _visitors(office=None):
     """Cross-office travel — who's visiting other offices."""
     visitors_path = os.path.join(config.DATA_DIR, "visitors.pkl")
     if not os.path.exists(visitors_path):
         return {"error": "Visitor data not available. Run the pipeline first."}
     with open(visitors_path, "rb") as f:
         data = pickle.load(f)
+
+    if office:
+        from tools.query_office_intel import _match_office
+        matched = _match_office(office)
+        if not matched:
+            return {"error": f"Office '{office}' not found. Check spelling or try a different name."}
+        # Filter routes where the office appears as origin or destination
+        routes = data.get("routes", [])
+        data["routes"] = [
+            r for r in routes
+            if r.get("from_office") == matched or r.get("to_office") == matched
+        ]
+
     return data
 
 
@@ -344,8 +365,9 @@ def _team_sync(office=None):
     if office:
         from tools.query_office_intel import _match_office
         matched = _match_office(office)
-        if matched:
-            data = {k: v for k, v in data.items() if v.get("office") == matched}
+        if not matched:
+            return {"error": f"Office '{office}' not found. Check spelling or try a different name."}
+        data = {k: v for k, v in data.items() if v.get("office") == matched}
 
     # Sort: low sync first (these are the interesting ones)
     teams = sorted(data.values(), key=lambda x: x.get("sync_score", 0))
@@ -420,8 +442,9 @@ def _manager_gravity(office=None):
     if office:
         from tools.query_office_intel import _match_office
         matched = _match_office(office)
-        if matched:
-            data = {k: v for k, v in data.items() if v.get("office") == matched}
+        if not matched:
+            return {"error": f"Office '{office}' not found. Check spelling or try a different name."}
+        data = {k: v for k, v in data.items() if v.get("office") == matched}
 
     managers = sorted(data.values(), key=lambda x: x.get("gravity_score", 0), reverse=True)
 
@@ -453,8 +476,9 @@ def _new_hires(office=None):
     if office:
         from tools.query_office_intel import _match_office
         matched = _match_office(office)
-        if matched:
-            people = [p for p in people if p.get("office") == matched]
+        if not matched:
+            return {"error": f"Office '{office}' not found. Check spelling or try a different name."}
+        people = [p for p in people if p.get("office") == matched]
 
     return {
         "total_new_hires": len(people),

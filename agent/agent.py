@@ -92,7 +92,7 @@ def tool_query_person(
 
 def tool_render_card(
     card_type: Annotated[Literal[
-        "briefing", "office_detail", "leaderboard", "person", "comparison",
+        "briefing", "office_detail", "leaderboard", "person",
         "trending", "visitors", "who_was_in", "ghost", "team_sync",
         "org_leader", "manager_gravity", "new_hires", "weekend", "generic"
     ], Field(description="Card template to use. Use a specific type when it matches the data, or 'generic' for anything else.")],
