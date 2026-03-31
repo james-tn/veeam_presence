@@ -133,3 +133,4 @@ OFFICE_COUNTRY = {
 # ---------------------------------------------------------------------------
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
+# validation marker
