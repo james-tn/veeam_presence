@@ -8,10 +8,23 @@ import config
 _enriched = None
 
 
+def _fix_encoding(s):
+    """Fix double-encoded UTF-8 strings (latin-1 read of UTF-8 bytes)."""
+    if not isinstance(s, str):
+        return s
+    try:
+        return s.encode("latin-1").decode("utf-8")
+    except (UnicodeDecodeError, UnicodeEncodeError):
+        return s
+
+
 def _load_enriched():
     global _enriched
     if _enriched is None:
         _enriched = pd.read_pickle(os.path.join(config.DATA_DIR, "enriched.pkl"))
+        # Fix double-encoded names from pipeline
+        if "preferred_name" in _enriched.columns:
+            _enriched["preferred_name"] = _enriched["preferred_name"].apply(_fix_encoding)
     return _enriched
 
 
