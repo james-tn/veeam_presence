@@ -439,7 +439,7 @@ def error_card(message):
 # ─── Helpers ───
 
 def _wrap(body, actions=None):
-    card = {"$schema": "http://adaptivecards.io/schemas/adaptive-card.json", "type": "AdaptiveCard", "version": "1.5", "body": body}
+    card = {"$schema": "http://adaptivecards.io/schemas/adaptive-card.json", "type": "AdaptiveCard", "version": "1.2", "body": body}
     if actions:
         card["actions"] = actions
     return card
