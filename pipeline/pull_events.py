@@ -1,95 +1,94 @@
 """Step 1: Pull raw occupancy events and Workday data from Databricks.
 
-Uses PowerShell subprocess for Databricks queries (the Windows HTTP stack
-is required due to corporate network agent routing). Python handles all
-analytics from step 2 onwards.
+Uses the Databricks SQL Statement Execution API with Entra ID (MSI) authentication.
+On Azure Container Apps, DefaultAzureCredential uses the system-assigned managed identity.
+Locally, it falls back to Azure CLI credentials.
 """
 
 import pandas as pd
-import subprocess
+import requests
 import json
-import tempfile
 import os
 import sys
+import time
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import config
 
 
-def _run_ps_query(sql, label=""):
-    """Execute SQL via PowerShell Invoke-RestMethod and return a DataFrame."""
+def _get_databricks_token():
+    """Get an Entra ID access token for Databricks using DefaultAzureCredential."""
+    from azure.identity import DefaultAzureCredential
+    credential = DefaultAzureCredential()
+    # The resource ID for Databricks is "2ff814a6-3304-4ab8-85cb-cd0e6f879c1d"
+    # (the well-known Databricks Azure AD application ID)
+    token = credential.get_token("2ff814a6-3304-4ab8-85cb-cd0e6f879c1d/.default")
+    return token.token
+
+
+def _run_query(sql, label=""):
+    """Execute SQL via the Databricks SQL Statement Execution API and return a DataFrame."""
     if label:
         print(f"  [{label}]", end=" ", flush=True)
 
-    wh_id = config.DATABRICKS_HTTP_PATH.split("/")[-1]
-    out_file = os.path.join(tempfile.gettempdir(), "dbx_query_result.json")
+    host = config.DATABRICKS_HOST.rstrip("/")
+    if not host.startswith("https://"):
+        host = f"https://{host}"
 
-    ps_script = f'''
-$token = "{config.DATABRICKS_TOKEN}"
-$workspace = "https://{config.DATABRICKS_HOST}"
-$wh = "{wh_id}"
-$headers = @{{ "Authorization" = "Bearer $token"; "Content-Type" = "application/json" }}
-$out = "{out_file.replace(os.sep, '/')}"
+    warehouse_id = config.DATABRICKS_WAREHOUSE_ID
+    token = _get_databricks_token()
 
-$body = @{{ statement = @"
-{sql}
-"@; warehouse_id = $wh; wait_timeout = "0s" }} | ConvertTo-Json
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
 
-$r = Invoke-RestMethod -Uri "$workspace/api/2.0/sql/statements" -Method POST -Headers $headers -Body $body -TimeoutSec 120
-$sid = $r.statement_id
-
-# Poll until complete
-for ($i = 0; $i -lt 120; $i++) {{
-    if ($r.status.state -eq "SUCCEEDED") {{ break }}
-    if ($r.status.state -eq "FAILED") {{ throw "Query failed: $($r.status.error.message)" }}
-    Start-Sleep -Seconds 2
-    $r = Invoke-RestMethod -Uri "$workspace/api/2.0/sql/statements/$sid" -Method GET -Headers $headers
-}}
-
-if ($r.status.state -ne "SUCCEEDED") {{ throw "Query timed out" }}
-
-$columns = $r.manifest.schema.columns | ForEach-Object {{ $_.name }}
-$result = @{{ columns = $columns; rows = $r.result.data_array; row_count = $r.result.row_count }}
-
-# Handle pagination
-$next = $r.result.next_chunk_internal_link
-while ($next) {{
-    $chunk = Invoke-RestMethod -Uri "$workspace$next" -Method GET -Headers $headers
-    $result.rows += $chunk.data_array
-    $next = $chunk.next_chunk_internal_link
-}}
-
-$result | ConvertTo-Json -Depth 10 -Compress | Out-File $out -Encoding utf8
-'''
-
-    ps_file = os.path.join(tempfile.gettempdir(), "dbx_query.ps1")
-    with open(ps_file, "w", encoding="utf-8") as f:
-        f.write(ps_script)
-
-    proc = subprocess.run(
-        ["powershell.exe", "-ExecutionPolicy", "Bypass", "-File", ps_file],
-        capture_output=True, text=True, timeout=600,
+    # Submit query
+    resp = requests.post(
+        f"{host}/api/2.0/sql/statements",
+        headers=headers,
+        json={"statement": sql, "warehouse_id": warehouse_id, "wait_timeout": "0s"},
+        timeout=120,
     )
+    resp.raise_for_status()
+    result = resp.json()
+    statement_id = result["statement_id"]
 
-    if proc.returncode != 0:
-        raise RuntimeError(f"PowerShell query failed: {proc.stderr[:500]}")
+    # Poll until complete
+    for _ in range(120):
+        state = result.get("status", {}).get("state", "")
+        if state == "SUCCEEDED":
+            break
+        if state == "FAILED":
+            error_msg = result.get("status", {}).get("error", {}).get("message", "Unknown error")
+            raise RuntimeError(f"Query failed: {error_msg}")
+        time.sleep(2)
+        resp = requests.get(
+            f"{host}/api/2.0/sql/statements/{statement_id}",
+            headers=headers,
+            timeout=30,
+        )
+        resp.raise_for_status()
+        result = resp.json()
 
-    with open(out_file, "r", encoding="utf-8-sig") as f:
-        data = json.load(f)
+    if result.get("status", {}).get("state") != "SUCCEEDED":
+        raise RuntimeError("Query timed out")
 
-    columns = data.get("columns", [])
-    rows = data.get("rows", [])
+    columns = [col["name"] for col in result["manifest"]["schema"]["columns"]]
+    rows = result.get("result", {}).get("data_array", [])
+
+    # Handle pagination
+    next_link = result.get("result", {}).get("next_chunk_internal_link")
+    while next_link:
+        resp = requests.get(f"{host}{next_link}", headers=headers, timeout=30)
+        resp.raise_for_status()
+        chunk = resp.json()
+        rows.extend(chunk.get("data_array", []))
+        next_link = chunk.get("next_chunk_internal_link")
 
     df = pd.DataFrame(rows, columns=columns)
 
     if label:
         print(f"{len(df):,} rows")
-
-    # Cleanup
-    for tmp in [ps_file, out_file]:
-        try:
-            os.remove(tmp)
-        except OSError:
-            pass
 
     return df
 
@@ -102,7 +101,7 @@ def pull_occupancy(weeks=None):
 FROM {config.OCCUPANCY_TABLE}
 WHERE timestamp >= DATE_ADD(CURRENT_DATE(), -{days})"""
 
-    df = _run_ps_query(query, f"Occupancy events (last {weeks} weeks)")
+    df = _run_query(query, f"Occupancy events (last {weeks} weeks)")
 
     # Type conversions (REST API returns strings)
     df["timestamp"] = pd.to_datetime(df["timestamp"])
@@ -121,7 +120,7 @@ def pull_workday():
     businesstitle, country, Employee_ID
 FROM {config.WORKDAY_TABLE}"""
 
-    return _run_ps_query(query, "Workday employees")
+    return _run_query(query, "Workday employees")
 
 
 if __name__ == "__main__":

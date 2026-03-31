@@ -6,10 +6,10 @@ import os
 # Credentials (set via environment variables — never hardcode in committed files)
 # ---------------------------------------------------------------------------
 # Local dev: set via run_pipeline.ps1 / run_harness.ps1
-# Production: set via Azure Key Vault → container env vars
+# Production: set via Azure Container App env vars + managed identity (Entra ID)
 DATABRICKS_HOST = os.environ.get("DATABRICKS_HOST", "")
-DATABRICKS_TOKEN = os.environ.get("DATABRICKS_TOKEN", "")
-DATABRICKS_HTTP_PATH = os.environ.get("DATABRICKS_HTTP_PATH", "")
+DATABRICKS_AZURE_RESOURCE_ID = os.environ.get("DATABRICKS_AZURE_RESOURCE_ID", "")
+DATABRICKS_WAREHOUSE_ID = os.environ.get("DATABRICKS_WAREHOUSE_ID", "")
 # Azure OpenAI (used by agent/ service via agent/config.py)
 # Kept here for reference — agent/config.py is the primary config
 AZURE_OPENAI_ENDPOINT = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
