@@ -19,6 +19,7 @@ pipeline_run.txt
 # Dev-only files
 dev_ui/
 tests/
+legacy/
 infra/
 .github/
 *.md

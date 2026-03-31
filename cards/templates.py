@@ -64,7 +64,7 @@ def briefing_card(data):
     body.append(_freshness(date))
 
     return _wrap(body, _actions([
-        ("Show all offices", "Show me all 17 offices"),
+        ("Show all offices", "Show me all 18 offices"),
         ("Leaderboard", "Show me the leaderboard for Prague"),
         ("Trending up", "Who's trending up the most?"),
     ]))
@@ -331,7 +331,7 @@ def welcome_card():
             {"type": "TextBlock", "text": "I track daily attendance across every Veeam office worldwide. I can tell you how many people are in each office, who the regulars are, which teams are coordinating their days, who's traveling between offices, and how new hires are settling in.", "wrap": True, "size": "Small", "spacing": "Medium"},
             {"type": "TextBlock", "text": "Just ask in plain language — I'll give you the numbers.", "size": "Small", "isSubtle": True, "spacing": "Small", "wrap": True},
             {"type": "FactSet", "spacing": "Medium", "facts": [
-                {"title": "Offices", "value": "17 across Americas, EMEA, and APJ"},
+                {"title": "Offices", "value": "18 across Americas, EMEA, and APJ"},
                 {"title": "People", "value": "~3,000 tracked daily"},
                 {"title": "Coverage", "value": "Attendance, travel, team sync, new hires"},
                 {"title": "Refresh", "value": "Every morning"},
@@ -382,7 +382,7 @@ def overview_card():
             {"type": "TextBlock", "text": "Trends and changes", "weight": "Bolder", "size": "Small"},
             {"type": "TextBlock", "text": "Who's coming in more or less, which offices are getting quieter", "size": "Small", "spacing": "None", "wrap": True},
         ]},
-        {"type": "TextBlock", "text": "17 offices · ~3,000 people · refreshed daily", "size": "Small", "isSubtle": True, "spacing": "Medium"},
+        {"type": "TextBlock", "text": "18 offices · ~3,000 people · refreshed daily", "size": "Small", "isSubtle": True, "spacing": "Medium"},
     ]
 
     return _wrap(

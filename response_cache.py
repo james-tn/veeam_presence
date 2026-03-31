@@ -64,19 +64,19 @@ def check_pregenerated(user_message):
     return None
 
 
-def check_query_cache(user_message):
-    """Check short-TTL cache for recent identical queries."""
-    key = _cache_key(user_message)
+def check_query_cache(user_message, conversation_id="default"):
+    """Check short-TTL cache for recent identical queries (scoped by conversation)."""
+    key = _cache_key(user_message, conversation_id)
     entry = _query_cache.get(key)
     if entry and time.time() - entry["time"] < _CACHE_TTL:
-        return entry["response"]
-    return None
+        return entry["response"], entry.get("card")
+    return None, None
 
 
-def store_query_cache(user_message, response):
-    """Cache a Claude response for 5 minutes."""
-    key = _cache_key(user_message)
-    _query_cache[key] = {"response": response, "time": time.time()}
+def store_query_cache(user_message, response, card=None, conversation_id="default"):
+    """Cache a response for 5 minutes (scoped by conversation)."""
+    key = _cache_key(user_message, conversation_id)
+    _query_cache[key] = {"response": response, "card": card, "time": time.time()}
     # Cleanup old entries
     now = time.time()
     expired = [k for k, v in _query_cache.items() if now - v["time"] > _CACHE_TTL]
@@ -84,7 +84,7 @@ def store_query_cache(user_message, response):
         del _query_cache[k]
 
 
-def _cache_key(text):
-    """Normalize query to a cache key."""
-    normalized = text.lower().strip()
+def _cache_key(text, conversation_id="default"):
+    """Normalize query to a cache key, scoped by conversation."""
+    normalized = f"{conversation_id}:{text.lower().strip()}"
     return hashlib.md5(normalized.encode()).hexdigest()

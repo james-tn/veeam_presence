@@ -19,8 +19,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import config
 from agent.agent import run_agent, cleanup_sessions
-from tools.query_office_intel import load_cache
-from tools.query_person import _load_enriched
 from response_cache import (
     load_pregenerated, check_pregenerated, check_query_cache, store_query_cache,
 )
@@ -46,6 +44,8 @@ _stats = {
 async def lifespan(app):
     """Pre-load caches on startup."""
     logger.info("Loading Presence data caches...")
+    from tools.query_office_intel import load_cache
+    from tools.query_person import _load_enriched
     load_cache()
     _load_enriched()
     load_pregenerated()
@@ -107,11 +107,11 @@ async def handle_message(request: Request):
         return JSONResponse({"text": pregen_response, "card": None})
 
     # Layer 2: Check short-TTL query cache (recent identical queries)
-    cached_response = check_query_cache(user_text)
+    cached_response, cached_card = check_query_cache(user_text, conversation_id)
     if cached_response:
         elapsed = time.time() - start_time
         logger.info("QUERY user=%s text=\"%s\" response=cached time=%.3fs", user_id, user_text[:80], elapsed)
-        return JSONResponse({"text": cached_response, "card": None})
+        return JSONResponse({"text": cached_response, "card": cached_card})
 
     # Layer 3: Call agent (async)
     _cleanup_stale()
@@ -133,18 +133,22 @@ async def handle_message(request: Request):
     conv["last_active"] = time.time()
     _conversations[conversation_id] = conv
 
-    # Try to extract card from response
-    card = None
-    try:
-        from cards.renderer import try_parse_card
-        card, remaining_text = try_parse_card(response_text)
-        if card:
-            response_text = remaining_text or ""
-    except Exception:
-        pass
+    # Primary card source: card_builder stash (populated by tool_render_card)
+    from cards import card_builder
+    card = card_builder.build_card(conversation_id)
 
-    # Cache this response for 5 minutes
-    store_query_cache(user_text, response_text)
+    # Fallback: legacy try_parse_card for backward compat
+    if card is None:
+        try:
+            from cards.renderer import try_parse_card
+            card, remaining_text = try_parse_card(response_text)
+            if card:
+                response_text = remaining_text or ""
+        except Exception:
+            pass
+
+    # Cache this response for 5 minutes (text + card)
+    store_query_cache(user_text, response_text, card, conversation_id)
 
     elapsed = time.time() - start_time
     has_card = "card" if card else "text"

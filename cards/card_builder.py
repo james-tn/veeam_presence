@@ -20,7 +20,9 @@ from typing import Optional
 
 from cards.templates import (
     briefing_card,
+    comparison_card,
     data_card,
+    leaderboard_card,
     office_detail_card,
     person_card,
     trending_card,
@@ -39,7 +41,9 @@ _lock = threading.Lock()
 _TYPED_TEMPLATES = {
     "briefing": briefing_card,
     "office_detail": office_detail_card,
+    "leaderboard": leaderboard_card,
     "person": person_card,
+    "comparison": lambda data: comparison_card(data.get("offices", [data])),
     "trending": trending_card,
     "visitors": visitors_card,
     "who_was_in": who_was_in_card,

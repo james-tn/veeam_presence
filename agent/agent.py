@@ -37,14 +37,12 @@ from agent.config import (
     AZURE_OPENAI_API_VERSION,
 )
 from system_prompt import SYSTEM_PROMPT
-from tools.query_office_intel import query_office_intel
-from tools.query_person import query_person
 from cards import card_builder
 
 logger = logging.getLogger(__name__)
 
 _agent = None
-_sessions = {}  # conversation_id -> AgentSession
+_sessions = {}  # conversation_id -> {"session": AgentSession, "last_active": float}
 _SESSION_TTL = 1800  # 30 minutes
 
 # Per-coroutine conversation ID for card stashing (async-safe)
@@ -68,6 +66,7 @@ def tool_query_office_intel(
     """Get office headcounts, top people, health scores, and team info.
     No office = all offices. With office name = that office's full detail."""
     import json
+    from tools.query_office_intel import query_office_intel
     result = query_office_intel(office=office)
     card_builder.push(_conversation_id_var.get(), "query_office_intel", result)
     return json.dumps(result, default=str)
@@ -85,6 +84,7 @@ def tool_query_person(
     trending_up/trending_down, visitors (cross-office travel), team_sync, ghost (declining offices),
     org_leader, manager_gravity, new_hires, weekend."""
     import json
+    from tools.query_person import query_person
     result = query_person(person=person, office=office, query_type=query_type)
     card_builder.push(_conversation_id_var.get(), "query_person", result)
     return json.dumps(result, default=str)
@@ -92,9 +92,9 @@ def tool_query_person(
 
 def tool_render_card(
     card_type: Annotated[Literal[
-        "briefing", "office_detail", "person", "trending", "visitors",
-        "who_was_in", "ghost", "team_sync", "org_leader", "manager_gravity",
-        "new_hires", "weekend", "generic"
+        "briefing", "office_detail", "leaderboard", "person", "comparison",
+        "trending", "visitors", "who_was_in", "ghost", "team_sync",
+        "org_leader", "manager_gravity", "new_hires", "weekend", "generic"
     ], Field(description="Card template to use. Use a specific type when it matches the data, or 'generic' for anything else.")],
     title: Annotated[str, Field(description="Card title — short, factual (e.g. 'Prague Office' or 'Offices Showing Decay')")],
     highlights: Annotated[Optional[list[str]], Field(description="Key data points to show on the card. Each string is one line. Used for generic/ghost/team_sync/org_leader/manager_gravity/new_hires/weekend cards.")] = None,
@@ -255,8 +255,10 @@ async def run_agent(user_message, history=None, conversation_id="default"):
 
     # Get or create session for this conversation
     if conversation_id not in _sessions:
-        _sessions[conversation_id] = agent.create_session()
-    session = _sessions[conversation_id]
+        _sessions[conversation_id] = {"session": agent.create_session(), "last_active": time.time()}
+    entry = _sessions[conversation_id]
+    entry["last_active"] = time.time()
+    session = entry["session"]
 
     # Set per-coroutine conversation ID for card stashing (async-safe)
     _conversation_id_var.set(conversation_id)
@@ -279,6 +281,6 @@ def cleanup_sessions():
     """Remove expired sessions."""
     now = time.time()
     expired = [k for k, v in _sessions.items()
-               if hasattr(v, "last_active") and now - v.last_active > _SESSION_TTL]
+               if now - v["last_active"] > _SESSION_TTL]
     for k in expired:
         del _sessions[k]

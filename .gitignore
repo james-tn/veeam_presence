@@ -56,3 +56,6 @@ output/
 # OS
 Thumbs.db
 .DS_Store
+
+# Legacy code (pre-R1 migration, archived)
+legacy/
