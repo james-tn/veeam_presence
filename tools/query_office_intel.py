@@ -210,17 +210,17 @@ def _global_summary():
     return result
 
 
-TOOL_SCHEMA = {
-    "name": "query_office_intel",
-    "description": "Get office headcounts, top people, health scores, and team info. No office = all offices. With office name = that office's full detail.",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "office": {
-                "type": "string",
-                "description": "Office name. Omit for all offices.",
-            },
-        },
-        "required": [],
-    },
-}
+# ---------------------------------------------------------------------------
+# Typed wrapper — Agent Framework auto-generates schema from type hints
+# ---------------------------------------------------------------------------
+from typing import Annotated, Optional
+from pydantic import Field
+
+
+def tool_query_office_intel(
+    office: Annotated[Optional[str], Field(description="Office name. Omit for all offices.")] = None,
+) -> str:
+    """Get office headcounts, top people, health scores, and team info.
+    No office = all offices. With office name = that office's full detail."""
+    import json
+    return json.dumps(query_office_intel(office=office), default=str)

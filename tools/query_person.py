@@ -515,26 +515,23 @@ def _ghost_offices():
     return {"offices_with_changes": offices}
 
 
-TOOL_SCHEMA = {
-    "name": "query_person",
-    "description": "Get data about people and teams. Query types: pattern (person lookup), who_was_in (office attendees), trending_up/trending_down, visitors (cross-office travel), team_sync, ghost (declining offices), org_leader (org hierarchy rollups), manager_gravity (does manager presence pull team in?), new_hires (are new hires integrating?), weekend (weekend attendance).",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "person": {
-                "type": "string",
-                "description": "Person's name or email (e.g. 'Scott Jackson', 'scott.jackson@veeam.com')",
-            },
-            "office": {
-                "type": "string",
-                "description": "Office name — used with query_type='who_was_in'",
-            },
-            "query_type": {
-                "type": "string",
-                "enum": ["pattern", "who_was_in", "trending_up", "trending_down", "visitors", "team_sync", "ghost", "org_leader", "manager_gravity", "new_hires", "weekend"],
-                "description": "Type of query. Default: 'pattern' for person queries, 'who_was_in' for office queries.",
-            },
-        },
-        "required": [],
-    },
-}
+# ---------------------------------------------------------------------------
+# Typed wrapper — Agent Framework auto-generates schema from type hints
+# ---------------------------------------------------------------------------
+from typing import Annotated, Optional, Literal
+from pydantic import Field
+
+
+def tool_query_person(
+    person: Annotated[Optional[str], Field(description="Person's name or email (e.g. 'Scott Jackson', 'scott.jackson@veeam.com')")] = None,
+    office: Annotated[Optional[str], Field(description="Office name — used with query_type='who_was_in' or to filter results")] = None,
+    query_type: Annotated[Optional[Literal[
+        "pattern", "who_was_in", "trending_up", "trending_down", "visitors",
+        "team_sync", "ghost", "org_leader", "manager_gravity", "new_hires", "weekend"
+    ]], Field(description="Type of query. Default: 'pattern' for person queries, 'who_was_in' for office queries.")] = None,
+) -> str:
+    """Get data about people and teams. Query types: pattern (person lookup), who_was_in (office attendees),
+    trending_up/trending_down, visitors (cross-office travel), team_sync, ghost (declining offices),
+    org_leader, manager_gravity, new_hires, weekend."""
+    import json
+    return json.dumps(query_person(person=person, office=office, query_type=query_type), default=str)

@@ -36,8 +36,18 @@ venv/
 
 # Environment / secrets
 .env
-*.env
+.env.*
 secrets/
+
+# Generated infra outputs
+.env.outputs
+.env.app-registrations
+
+# Test fixtures (regenerated)
+tests/fixtures/*.pkl
+
+# Card preview output
+output/
 
 # IDE
 .vscode/

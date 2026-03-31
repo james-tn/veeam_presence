@@ -2,7 +2,7 @@
   "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
   "manifestVersion": "1.17",
   "version": "1.0.0",
-  "id": "REPLACE-WITH-NEW-GUID",
+  "id": "2e28219d-9a4d-4540-b5e2-d0318aacf19e",
   "developer": {
     "name": "Veeam Revenue Intelligence",
     "websiteUrl": "https://www.veeam.com",
@@ -24,34 +24,15 @@
   "accentColor": "#005f4b",
   "bots": [
     {
-      "botId": "REPLACE-WITH-GATEWAY-APP-ID",
+      "botId": "84be215d-31d3-435b-a4da-5382c66eb7d7",
       "scopes": ["personal"],
       "commandLists": [],
       "supportsFiles": false,
       "isNotificationOnly": false
     }
   ],
-  "validDomains": [],
-  "copilotAgents": {
-    "declarativeAgents": [
-      {
-        "$schema": "https://aka.ms/json-schemas/copilot/declarative-agent/v1.0/schema.json",
-        "id": "presenceAgent",
-        "name": "Veeam Presence",
-        "description": "Office attendance intelligence — headcounts, leaderboards, trends, travel, team sync",
-        "instructions": "You are Veeam Presence. Answer questions about office attendance factually using the connected tools.",
-        "conversation_starters": [
-          {"title": "What can you tell me?", "text": "What can you tell me?"},
-          {"title": "Daily briefing", "text": "Give me the daily briefing"},
-          {"title": "Prague leaderboard", "text": "Who's showing up the most in Prague?"},
-          {"title": "Atlanta update", "text": "What's going on in Atlanta?"},
-          {"title": "Cross-office travel", "text": "Who is traveling between offices?"},
-          {"title": "Team coordination", "text": "Are teams coming in on the same days?"},
-          {"title": "Manager impact", "text": "Which managers pull their teams in?"},
-          {"title": "New hires", "text": "Are new hires settling in?"},
-          {"title": "Trending up", "text": "Who's trending up the most?"}
-        ]
-      }
-    ]
-  }
+  "validDomains": [
+    "presence-wrapper-dev.orangepond-a43b118f.eastus2.azurecontainerapps.io",
+    "token.botframework.com"
+  ]
 }

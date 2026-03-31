@@ -1,38 +1,51 @@
-version: '3.8'
-
 services:
-  # Agent service — receives messages from gateway, calls Claude
+  # Agent service — receives messages, runs Azure OpenAI agent
   agent:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: agent/Dockerfile
     ports:
       - "8000:8000"
     environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - DATABRICKS_HOST=${DATABRICKS_HOST}
-      - DATABRICKS_TOKEN=${DATABRICKS_TOKEN}
-      - DATABRICKS_HTTP_PATH=${DATABRICKS_HTTP_PATH}
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
+      - AZURE_OPENAI_CHAT_DEPLOYMENT_NAME=${AZURE_OPENAI_CHAT_DEPLOYMENT_NAME:-gpt-4o}
+      - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION:-2024-12-01-preview}
     volumes:
       - presence-data:/app/data
     restart: unless-stopped
 
-  # Gateway — connects to Teams/Copilot (for local testing with ngrok)
-  gateway:
+  # M365 wrapper — connects to Teams via Microsoft Agents SDK
+  wrapper:
     build:
-      context: ./gateway
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: m365_wrapper/Dockerfile
     ports:
       - "3978:3978"
     environment:
       - BOT_APP_ID=${BOT_APP_ID}
       - BOT_APP_PASSWORD=${BOT_APP_PASSWORD}
-      - AGENT_SERVICE_URL=http://agent:8000
+      - AZURE_TENANT_ID=${AZURE_TENANT_ID}
+      - PRESENCE_SERVICE_BASE_URL=http://agent:8000
     depends_on:
       - agent
     restart: unless-stopped
 
+  # Dev UI — local testing with card rendering (dev profile only)
+  dev-ui:
+    build:
+      context: .
+      dockerfile: agent/Dockerfile
+    command: ["python", "-m", "dev_ui.server"]
+    ports:
+      - "8787:8787"
+    volumes:
+      - presence-data:/app/data
+      - ./dev_ui:/app/dev_ui:ro
+    environment:
+      - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT}
+      - AZURE_OPENAI_CHAT_DEPLOYMENT_NAME=${AZURE_OPENAI_CHAT_DEPLOYMENT_NAME:-gpt-4o}
+    profiles:
+      - dev
+
 volumes:
   presence-data:
-    # Shared volume for pipeline output → agent service
-    # Pipeline job writes here, agent reads on startup

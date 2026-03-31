@@ -1,9 +1,6 @@
 # Credentials and test files
-data/
 output/
 *.ps1
-*.pkl
-*.json
 test_*.py
 test_*.ps1
 dbx_test.txt
@@ -18,3 +15,13 @@ check_freshness.ps1
 validation_queries.ps1
 test_proxy.*
 pipeline_run.txt
+
+# Dev-only files
+dev_ui/
+tests/
+infra/
+.github/
+*.md
+.env*
+uv.lock
+pyproject.toml

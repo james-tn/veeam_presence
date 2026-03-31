@@ -400,6 +400,29 @@ def overview_card():
     )
 
 
+def data_card(title, highlights, actions_list=None):
+    """Generic card driven by LLM-provided title + highlights.
+
+    Used for query types that don't have a dedicated template (ghost, team_sync,
+    org_leader, manager_gravity, new_hires, weekend) or whenever the LLM decides
+    a visual card is helpful.
+    """
+    body = [
+        {"type": "Container", "style": "Accent", "bleed": True, "items": [
+            {"type": "TextBlock", "text": title, "weight": "Bolder", "size": "Medium", "color": "Light"},
+        ]},
+    ]
+
+    for h in (highlights or [])[:12]:
+        body.append({"type": "TextBlock", "text": h, "size": "Small", "wrap": True,
+                      "spacing": "Small"})
+
+    actions = _actions(actions_list) if actions_list else _actions([
+        ("All offices", "Give me the daily briefing"),
+    ])
+    return _wrap(body, actions)
+
+
 def error_card(message):
     """Error state."""
     return _wrap(

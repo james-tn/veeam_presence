@@ -1,0 +1,38 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.17",
+  "version": "${APP_VERSION}",
+  "id": "${M365_APP_PACKAGE_ID}",
+  "developer": {
+    "name": "${M365_DEVELOPER_NAME}",
+    "websiteUrl": "${M365_DEVELOPER_WEBSITE_URL}",
+    "privacyUrl": "${M365_PRIVACY_URL}",
+    "termsOfUseUrl": "${M365_TERMS_URL}"
+  },
+  "name": {
+    "short": "${M365_APP_SHORT_NAME}",
+    "full": "${M365_APP_FULL_NAME}"
+  },
+  "description": {
+    "short": "${M365_APP_SHORT_DESCRIPTION}",
+    "full": "${M365_APP_FULL_DESCRIPTION}"
+  },
+  "icons": {
+    "color": "icon-color.png",
+    "outline": "icon-outline.png"
+  },
+  "accentColor": "${M365_APP_ACCENT_COLOR}",
+  "bots": [
+    {
+      "botId": "${BOT_APP_ID}",
+      "scopes": ["personal"],
+      "commandLists": [],
+      "supportsFiles": false,
+      "isNotificationOnly": false
+    }
+  ],
+  "validDomains": [
+    "${WRAPPER_VALID_DOMAIN}",
+    "token.botframework.com"
+  ]
+}

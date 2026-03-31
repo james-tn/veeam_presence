@@ -1,0 +1,192 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "**/*.md"
+      - "**/*.MD"
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: "Integration release SHA to promote"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+  id-token: write
+
+concurrency:
+  group: deploy-production-${{ github.event_name == 'workflow_dispatch' && 'manual' || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  changes:
+    name: Classify Production Changes
+    runs-on: ubuntu-latest
+    outputs:
+      deploy_relevant: ${{ steps.classify.outputs.deploy_relevant }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dorny/paths-filter@v4.0.1
+        id: filter
+        with:
+          filters: |
+            agent_runtime:
+              - 'agent/**'
+              - 'tools/**'
+              - 'cards/**'
+              - 'data/**'
+              - 'pipeline/**'
+              - 'shared/**'
+              - 'config.py'
+              - 'system_prompt.py'
+              - 'response_cache.py'
+              - 'agent/Dockerfile'
+            wrapper_runtime:
+              - 'm365_wrapper/**'
+              - 'shared/**'
+              - 'm365_wrapper/Dockerfile'
+            infra_runtime:
+              - 'infra/**'
+      - id: classify
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ steps.filter.outputs.agent_runtime }}" == "true" || "${{ steps.filter.outputs.wrapper_runtime }}" == "true" || "${{ steps.filter.outputs.infra_runtime }}" == "true" ]]; then
+            echo "deploy_relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy_relevant=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy:
+    name: Deploy Production
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.deploy_relevant == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      ACA_ENV_NAME: ${{ vars.ACA_ENV_NAME }}
+      AGENT_ACA_APP_NAME: ${{ vars.AGENT_ACA_APP_NAME }}
+      WRAPPER_ACA_APP_NAME: ${{ vars.WRAPPER_ACA_APP_NAME }}
+      AZURE_OPENAI_ACCOUNT_NAME: ${{ vars.AZURE_OPENAI_ACCOUNT_NAME }}
+      AZURE_OPENAI_ENDPOINT: ${{ vars.AZURE_OPENAI_ENDPOINT }}
+      AZURE_OPENAI_CHAT_DEPLOYMENT_NAME: ${{ vars.AZURE_OPENAI_CHAT_DEPLOYMENT_NAME }}
+      AZURE_OPENAI_API_VERSION: ${{ vars.AZURE_OPENAI_API_VERSION }}
+      BOT_APP_ID: ${{ vars.BOT_APP_ID }}
+      BOT_APP_PASSWORD: ${{ secrets.BOT_APP_PASSWORD }}
+      ENV_SUFFIX: ${{ vars.ENV_SUFFIX }}
+      KEYVAULT_NAME: ${{ vars.KEYVAULT_NAME }}
+      KEYVAULT_BOT_APP_PASSWORD_NAME: ${{ vars.KEYVAULT_BOT_APP_PASSWORD_NAME }}
+      WRAPPER_BASE_URL: ${{ vars.WRAPPER_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Resolve promoted release SHA
+        id: resolve-release
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const inputSha = `${{ github.event.inputs.release_sha || '' }}`.trim();
+            if (inputSha) {
+              core.setOutput("release_sha", inputSha);
+              return;
+            }
+            if (context.eventName !== "push") {
+              core.setOutput("release_sha", context.sha);
+              return;
+            }
+            const response = await github.request("GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls", {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+            });
+            const pull = response.data.find((item) => item.base?.ref === "main") || response.data[0];
+            core.setOutput("release_sha", pull?.head?.sha || context.sha);
+      - uses: azure/login@v3
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+      - name: Download promoted release metadata artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          ARTIFACT_NAME: release-metadata-${{ steps.resolve-release.outputs.release_sha }}
+          RELEASE_SHA: ${{ steps.resolve-release.outputs.release_sha }}
+          OUTPUT_DIR: ${{ runner.temp }}/release-metadata
+          WORKFLOW_FILE: ci.yml
+          WAIT_SECONDS: 600
+        run: bash infra/scripts/ci-download-release-artifact.sh
+      - name: Fetch BOT_APP_PASSWORD from Key Vault
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${BOT_APP_PASSWORD:-}" ]]; then
+            echo "BOT_APP_PASSWORD already set from secrets; skipping Key Vault fetch."
+            exit 0
+          fi
+          if [[ -z "${KEYVAULT_BOT_APP_PASSWORD_NAME:-}" ]]; then
+            echo "No KEYVAULT_BOT_APP_PASSWORD_NAME configured; skipping." >&2
+            exit 0
+          fi
+          secret_value="$(az keyvault secret show --vault-name "$KEYVAULT_NAME" --name "$KEYVAULT_BOT_APP_PASSWORD_NAME" --query value -o tsv)"
+          {
+            echo "BOT_APP_PASSWORD<<EOF"
+            echo "$secret_value"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+      - name: Render ephemeral runtime env
+        env:
+          OUTPUT_ENV_FILE: ${{ runner.temp }}/production.env
+          RELEASE_METADATA_PATH: ${{ runner.temp }}/release-metadata/release-metadata.json
+        run: bash infra/scripts/ci-render-runtime-env.sh
+      - name: Deploy agent and wrapper
+        env:
+          ENV_FILE: ${{ runner.temp }}/production.env
+          DEPLOY_TARGET: production
+        run: bash infra/scripts/ci-deploy-stack.sh
+      - name: Validate production deployment
+        shell: bash
+        env:
+          ENV_FILE: ${{ runner.temp }}/production.env
+        run: |
+          set -euo pipefail
+          set -a
+          source <(sed 's/\r$//' "$ENV_FILE")
+          set +a
+          if [[ -n "${WRAPPER_BASE_URL:-}" ]]; then
+            curl -fsS "${WRAPPER_BASE_URL%/}/health"
+            echo
+            echo "Wrapper health check passed."
+          fi
+      - name: Write production deployment summaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          INPUT_ENV_FILE="${{ runner.temp }}/production.env" \
+          OUTPUT_ENV_FILE="${{ runner.temp }}/production.env.redacted" \
+            bash infra/scripts/ci-redact-env-file.sh
+          cat <<EOF > "${{ runner.temp }}/production-deployment-summary.txt"
+          release_sha=${{ steps.resolve-release.outputs.release_sha }}
+          runtime_env=${{ runner.temp }}/production.env
+          EOF
+      - uses: actions/upload-artifact@v6
+        with:
+          name: production-deployment-summary-${{ steps.resolve-release.outputs.release_sha }}
+          path: |
+            ${{ runner.temp }}/production.env.redacted
+            ${{ runner.temp }}/production-deployment-summary.txt
+          if-no-files-found: error

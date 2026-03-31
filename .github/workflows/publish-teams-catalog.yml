@@ -1,0 +1,54 @@
+name: Publish Teams Catalog
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifact_sha:
+        description: "SHA of the CI run that produced the M365 package artifact"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: publish-teams-catalog
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish to Teams Admin Catalog
+    runs-on: ubuntu-latest
+    environment: teams-catalog-admin
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Download M365 package artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          ARTIFACT_NAME: m365-package-${{ github.event.inputs.artifact_sha }}
+          RELEASE_SHA: ${{ github.event.inputs.artifact_sha }}
+          OUTPUT_DIR: ${{ runner.temp }}/m365-package
+          WORKFLOW_FILE: ci.yml
+          WAIT_SECONDS: 120
+        run: bash infra/scripts/ci-download-release-artifact.sh
+      - name: Display package contents
+        run: |
+          echo "=== M365 Package Contents ==="
+          ls -la ${{ runner.temp }}/m365-package/
+          echo ""
+          echo "=== Manifest ==="
+          cat ${{ runner.temp }}/m365-package/manifest.json
+          echo ""
+          echo ""
+          echo "Package is ready for upload to Teams Admin Center."
+          echo "Download the artifact and upload via: https://admin.teams.microsoft.com/policies/manage-apps"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: teams-catalog-bundle-${{ github.event.inputs.artifact_sha }}
+          path: ${{ runner.temp }}/m365-package/
+          if-no-files-found: error

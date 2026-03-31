@@ -1,0 +1,155 @@
+name: Deploy Integration
+
+on:
+  push:
+    branches:
+      - integration
+    paths-ignore:
+      - "**/*.md"
+      - "**/*.MD"
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+  id-token: write
+
+concurrency:
+  group: deploy-integration
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Classify Integration Changes
+    runs-on: ubuntu-latest
+    outputs:
+      deploy_relevant: ${{ steps.classify.outputs.deploy_relevant }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dorny/paths-filter@v4.0.1
+        id: filter
+        with:
+          filters: |
+            agent_runtime:
+              - 'agent/**'
+              - 'tools/**'
+              - 'cards/**'
+              - 'data/**'
+              - 'pipeline/**'
+              - 'shared/**'
+              - 'config.py'
+              - 'system_prompt.py'
+              - 'response_cache.py'
+              - 'agent/Dockerfile'
+            wrapper_runtime:
+              - 'm365_wrapper/**'
+              - 'shared/**'
+              - 'm365_wrapper/Dockerfile'
+            infra_runtime:
+              - 'infra/**'
+      - id: classify
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ steps.filter.outputs.agent_runtime }}" == "true" || "${{ steps.filter.outputs.wrapper_runtime }}" == "true" || "${{ steps.filter.outputs.infra_runtime }}" == "true" ]]; then
+            echo "deploy_relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy_relevant=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy:
+    name: Deploy Integration
+    needs: changes
+    if: needs.changes.outputs.deploy_relevant == 'true'
+    runs-on: ubuntu-latest
+    environment: integration
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AZURE_LOCATION: ${{ vars.AZURE_LOCATION }}
+      ACR_NAME: ${{ vars.ACR_NAME }}
+      ACA_ENV_NAME: ${{ vars.ACA_ENV_NAME }}
+      AGENT_ACA_APP_NAME: ${{ vars.AGENT_ACA_APP_NAME }}
+      WRAPPER_ACA_APP_NAME: ${{ vars.WRAPPER_ACA_APP_NAME }}
+      AZURE_OPENAI_ACCOUNT_NAME: ${{ vars.AZURE_OPENAI_ACCOUNT_NAME }}
+      AZURE_OPENAI_ENDPOINT: ${{ vars.AZURE_OPENAI_ENDPOINT }}
+      AZURE_OPENAI_CHAT_DEPLOYMENT_NAME: ${{ vars.AZURE_OPENAI_CHAT_DEPLOYMENT_NAME }}
+      AZURE_OPENAI_API_VERSION: ${{ vars.AZURE_OPENAI_API_VERSION }}
+      BOT_APP_ID: ${{ vars.BOT_APP_ID }}
+      BOT_APP_PASSWORD: ${{ secrets.BOT_APP_PASSWORD }}
+      ENV_SUFFIX: ${{ vars.ENV_SUFFIX }}
+      KEYVAULT_NAME: ${{ vars.KEYVAULT_NAME }}
+      KEYVAULT_BOT_APP_PASSWORD_NAME: ${{ vars.KEYVAULT_BOT_APP_PASSWORD_NAME }}
+      WRAPPER_BASE_URL: ${{ vars.WRAPPER_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: azure/login@v3
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+      - name: Download release metadata artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          ARTIFACT_NAME: release-metadata-${{ github.sha }}
+          RELEASE_SHA: ${{ github.sha }}
+          OUTPUT_DIR: ${{ runner.temp }}/release-metadata
+          WORKFLOW_FILE: ci.yml
+          WAIT_SECONDS: 600
+        run: bash infra/scripts/ci-download-release-artifact.sh
+      - name: Fetch BOT_APP_PASSWORD from Key Vault
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${BOT_APP_PASSWORD:-}" ]]; then
+            echo "BOT_APP_PASSWORD already set from secrets; skipping Key Vault fetch."
+            exit 0
+          fi
+          if [[ -z "${KEYVAULT_BOT_APP_PASSWORD_NAME:-}" ]]; then
+            echo "No KEYVAULT_BOT_APP_PASSWORD_NAME configured; skipping." >&2
+            exit 0
+          fi
+          secret_value="$(az keyvault secret show --vault-name "$KEYVAULT_NAME" --name "$KEYVAULT_BOT_APP_PASSWORD_NAME" --query value -o tsv)"
+          {
+            echo "BOT_APP_PASSWORD<<EOF"
+            echo "$secret_value"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+      - name: Render ephemeral runtime env
+        env:
+          OUTPUT_ENV_FILE: ${{ runner.temp }}/integration.env
+          RELEASE_METADATA_PATH: ${{ runner.temp }}/release-metadata/release-metadata.json
+        run: bash infra/scripts/ci-render-runtime-env.sh
+      - name: Deploy agent and wrapper
+        env:
+          ENV_FILE: ${{ runner.temp }}/integration.env
+          DEPLOY_TARGET: integration
+        run: bash infra/scripts/ci-deploy-stack.sh
+      - name: Validate integration deployment
+        env:
+          ENV_FILE: ${{ runner.temp }}/integration.env
+        run: bash infra/scripts/ci-validate-integration.sh
+      - name: Write deployment summaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          INPUT_ENV_FILE="${{ runner.temp }}/integration.env" \
+          OUTPUT_ENV_FILE="${{ runner.temp }}/integration.env.redacted" \
+            bash infra/scripts/ci-redact-env-file.sh
+          cat <<EOF > "${{ runner.temp }}/integration-deployment-summary.txt"
+          release_sha=${{ github.sha }}
+          runtime_env=${{ runner.temp }}/integration.env
+          EOF
+      - uses: actions/upload-artifact@v6
+        with:
+          name: integration-deployment-summary-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/integration.env.redacted
+            ${{ runner.temp }}/integration-deployment-summary.txt
+          if-no-files-found: error
