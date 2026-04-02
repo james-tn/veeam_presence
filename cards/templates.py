@@ -78,13 +78,23 @@ def office_detail_card(data):
     diff = people - typical
     date = data.get("data_through", "")
     day = data.get("day", "")
+    health = data.get("health_score")
 
     diff_text = f"+{diff} vs typical" if diff > 0 else f"{diff} vs typical" if diff < 0 else "right at typical"
     diff_color = "Good" if diff > 3 else ("Attention" if diff < -3 else "Default")
 
+    # Branded Accent header — consistent with briefing/leaderboard/person cards
+    header_items = [
+        {"type": "TextBlock", "text": office, "weight": "Bolder", "size": "Medium", "color": "Light"},
+        {"type": "TextBlock", "text": f"Data through {date}", "size": "Small", "color": "Light", "spacing": "None"},
+    ]
+    if health is not None:
+        header_items.append({"type": "TextBlock", "text": f"Health score: {health}", "size": "Small", "color": "Light", "spacing": "None"})
+
     body = [
-        {"type": "TextBlock", "text": office, "weight": "Bolder", "size": "Large", "color": "Accent"},
-        {"type": "ColumnSet", "columns": [
+        {"type": "Container", "style": "Accent", "bleed": True, "items": header_items},
+        # Big headcount + variance
+        {"type": "ColumnSet", "spacing": "Medium", "columns": [
             {"type": "Column", "width": "auto", "items": [
                 {"type": "TextBlock", "text": str(people), "size": "ExtraLarge", "weight": "Bolder"},
             ]},
@@ -94,6 +104,14 @@ def office_detail_card(data):
             ]},
         ]},
     ]
+
+    # Typical by day of week — compact FactSet
+    tbd = data.get("typical_by_day", {})
+    if tbd:
+        body.append({"type": "TextBlock", "text": "Typical by day", "weight": "Bolder", "size": "Small", "spacing": "Medium"})
+        body.append({"type": "FactSet", "spacing": "None", "facts": [
+            {"title": d, "value": str(n)} for d, n in tbd.items()
+        ]})
 
     # Weekly trend (compact)
     weekly = data.get("weekly_headcounts", [])
@@ -115,8 +133,6 @@ def office_detail_card(data):
         for p in top[:4]:
             top_items.append({"type": "TextBlock", "text": f"{p['name']} ({p.get('role', '')}) — {p['days']}", "size": "Small", "spacing": "None", "wrap": True})
         body.append({"type": "Container", "style": "Emphasis", "spacing": "Medium", "items": top_items})
-
-    body.append(_freshness(date))
 
     return _wrap(body, _actions([
         ("Leaderboard", f"Show me the leaderboard for {office.split()[0]}"),
@@ -200,6 +216,11 @@ def person_card(data):
             {"title": d, "value": str(n)} for d, n in dow.items()
         ]})
 
+    # Last 4 weeks trend
+    last_4 = data.get("last_4_weeks", [])
+    if last_4:
+        body.append({"type": "TextBlock", "text": f"Last 4 weeks: {' → '.join(str(w) for w in last_4)}", "size": "Small", "isSubtle": True, "spacing": "Small"})
+
     # Recent absences (compact)
     absent = data.get("days_not_in", [])
     if absent:
@@ -246,17 +267,24 @@ def trending_card(data):
     direction = data.get("direction", "trending_up")
     is_up = "up" in direction
     label = "Trending Up" if is_up else "Trending Down"
+    people = data.get("people", [])
+    subtitle = f"{len(people[:8])} people" if people else ""
 
     body = [
-        {"type": "TextBlock", "text": label, "weight": "Bolder", "size": "Medium", "color": "Accent"},
-        {"type": "ColumnSet", "spacing": "Small", "columns": [
+        # Consistent Accent header
+        {"type": "Container", "style": "Accent", "bleed": True, "items": [
+            {"type": "TextBlock", "text": label, "weight": "Bolder", "size": "Medium", "color": "Light"},
+            {"type": "TextBlock", "text": subtitle, "size": "Small", "color": "Light", "spacing": "None"},
+        ]},
+        # Column headers
+        {"type": "ColumnSet", "spacing": "Medium", "columns": [
             _col("stretch", "Person", subtle=True),
             _col("70px", "Was", subtle=True, align="Right"),
             _col("70px", "Now", subtle=True, align="Right"),
         ]},
     ]
 
-    for p in data.get("people", [])[:8]:
+    for p in people[:8]:
         body.append({"type": "ColumnSet", "spacing": "None", "columns": [
             _col("stretch", f"{p['name']}  \n{p.get('office', '')}", wrap=True),
             _col("70px", p.get("was", ""), align="Right"),
@@ -271,16 +299,21 @@ def trending_card(data):
 
 def visitors_card(data):
     """Cross-office travel."""
+    flows = data.get("flows", [])
+    subtitle = f"{len(flows)} routes · last 4 weeks" if flows else "Last 4 weeks"
+
     body = [
-        {"type": "TextBlock", "text": "Cross-Office Travel", "weight": "Bolder", "size": "Medium", "color": "Accent"},
-        {"type": "TextBlock", "text": "Last 4 weeks", "size": "Small", "isSubtle": True, "spacing": "None"},
-        {"type": "ColumnSet", "spacing": "Small", "columns": [
+        {"type": "Container", "style": "Accent", "bleed": True, "items": [
+            {"type": "TextBlock", "text": "Cross-Office Travel", "weight": "Bolder", "size": "Medium", "color": "Light"},
+            {"type": "TextBlock", "text": subtitle, "size": "Small", "color": "Light", "spacing": "None"},
+        ]},
+        {"type": "ColumnSet", "spacing": "Medium", "columns": [
             _col("stretch", "Route", subtle=True),
             _col("60px", "People", subtle=True, align="Right"),
         ]},
     ]
 
-    for flow in data.get("flows", [])[:6]:
+    for flow in flows[:6]:
         body.append({"type": "ColumnSet", "spacing": "None", "columns": [
             _col("stretch", f"{flow['from']} → {flow['to']}"),
             _col("60px", f"{flow['people']}", align="Right", bold=True),
@@ -297,10 +330,16 @@ def visitors_card(data):
 
 def who_was_in_card(data):
     """People in an office on a specific day."""
+    office = data.get("office", "")
+    headcount = data.get("headcount", 0)
+    date = data.get("date", "")
+
     body = [
-        {"type": "TextBlock", "text": data.get("office", ""), "weight": "Bolder", "size": "Medium", "color": "Accent"},
-        {"type": "TextBlock", "text": f"{data.get('headcount', 0)} people on {data.get('date', '')}", "size": "Small", "isSubtle": True, "spacing": "None"},
-        {"type": "ColumnSet", "spacing": "Small", "columns": [
+        {"type": "Container", "style": "Accent", "bleed": True, "items": [
+            {"type": "TextBlock", "text": office, "weight": "Bolder", "size": "Medium", "color": "Light"},
+            {"type": "TextBlock", "text": f"{headcount} people on {date}", "size": "Small", "color": "Light", "spacing": "None"},
+        ]},
+        {"type": "ColumnSet", "spacing": "Medium", "columns": [
             _col("stretch", "Name", subtle=True),
             _col("60px", "Role", subtle=True),
             _col("50px", "In at", subtle=True, align="Right"),
@@ -315,8 +354,8 @@ def who_was_in_card(data):
         ]})
 
     return _wrap(body, _actions([
-        ("Leaderboard", f"Show me the leaderboard for {data.get('office', '')}"),
-        ("About this office", f"Tell me about {data.get('office', '')}"),
+        ("Leaderboard", f"Show me the leaderboard for {office}"),
+        ("About this office", f"Tell me about {office}"),
     ]))
 
 
@@ -338,10 +377,10 @@ def welcome_card():
             ]},
         ],
         actions=[
-            {"type": "Action.Submit", "title": "Daily briefing", "data": {"msteams": {"type": "imBack", "value": "Give me the daily briefing"}}},
-            {"type": "Action.Submit", "title": "Leaderboard", "data": {"msteams": {"type": "imBack", "value": "Show me the leaderboard for Prague"}}},
-            {"type": "Action.Submit", "title": "Who's traveling?", "data": {"msteams": {"type": "imBack", "value": "Who is traveling between offices?"}}},
-            {"type": "Action.Submit", "title": "Trending up", "data": {"msteams": {"type": "imBack", "value": "Who's trending up the most?"}}},
+            {"type": "Action.Submit", "title": "Daily briefing", "data": {"msteams": {"type": "imBack", "value": "Give me the daily briefing"}, "value": "Give me the daily briefing"}},
+            {"type": "Action.Submit", "title": "Leaderboard", "data": {"msteams": {"type": "imBack", "value": "Show me the leaderboard for Prague"}, "value": "Show me the leaderboard for Prague"}},
+            {"type": "Action.Submit", "title": "Who's traveling?", "data": {"msteams": {"type": "imBack", "value": "Who is traveling between offices?"}, "value": "Who is traveling between offices?"}},
+            {"type": "Action.Submit", "title": "Trending up", "data": {"msteams": {"type": "imBack", "value": "Who's trending up the most?"}, "value": "Who's trending up the most?"}},
         ],
     )
 
@@ -406,6 +445,10 @@ def data_card(title, highlights, actions_list=None):
     Used for query types that don't have a dedicated template (ghost, team_sync,
     org_leader, manager_gravity, new_hires, weekend) or whenever the LLM decides
     a visual card is helpful.
+
+    Highlights that follow a "Subject — detail" pattern are rendered with the
+    subject in bold and the detail as subtle text, giving better visual hierarchy
+    than a flat list.
     """
     body = [
         {"type": "Container", "style": "Accent", "bleed": True, "items": [
@@ -414,8 +457,16 @@ def data_card(title, highlights, actions_list=None):
     ]
 
     for h in (highlights or [])[:12]:
-        body.append({"type": "TextBlock", "text": h, "size": "Small", "wrap": True,
-                      "spacing": "Small"})
+        subject, detail = _parse_highlight(h)
+        if detail:
+            # Two-line entry: subject bold + detail subtle
+            body.append({"type": "Container", "separator": True, "spacing": "Small", "items": [
+                {"type": "TextBlock", "text": subject, "weight": "Bolder", "size": "Small", "wrap": True, "spacing": "None"},
+                {"type": "TextBlock", "text": detail, "size": "Small", "wrap": True, "spacing": "None", "isSubtle": True},
+            ]})
+        else:
+            body.append({"type": "TextBlock", "text": h, "size": "Small", "wrap": True,
+                          "spacing": "Small"})
 
     actions = _actions(actions_list) if actions_list else _actions([
         ("All offices", "Give me the daily briefing"),
@@ -432,7 +483,7 @@ def error_card(message):
                 {"type": "TextBlock", "text": message, "wrap": True, "size": "Small"},
             ]},
         ],
-        actions=[{"type": "Action.Submit", "title": "Try again", "data": {"msteams": {"type": "imBack", "value": "Give me the daily briefing"}}}],
+        actions=[{"type": "Action.Submit", "title": "Try again", "data": {"msteams": {"type": "imBack", "value": "Give me the daily briefing"}, "value": "Give me the daily briefing"}}],
     )
 
 
@@ -446,7 +497,11 @@ def _wrap(body, actions=None):
 
 
 def _actions(pairs):
-    return [{"type": "Action.Submit", "title": label, "data": {"msteams": {"type": "imBack", "value": msg}}} for label, msg in pairs[:3]]
+    """Build Action.Submit buttons compatible with both Teams (imBack) and GitHub Copilot."""
+    return [{"type": "Action.Submit", "title": label, "data": {
+        "msteams": {"type": "imBack", "value": msg},
+        "value": msg,
+    }} for label, msg in pairs[:3]]
 
 
 def _col(width, text, bold=False, subtle=False, align=None, color=None, wrap=False):
@@ -468,3 +523,21 @@ def _col(width, text, bold=False, subtle=False, align=None, color=None, wrap=Fal
 def _freshness(date):
     """Subtle data-through footer."""
     return {"type": "TextBlock", "text": f"Data through {date}", "size": "Small", "isSubtle": True, "spacing": "Medium"}
+
+
+def _parse_highlight(text):
+    """Split 'Subject — detail' or 'Subject: detail' into (subject, detail).
+
+    Tries separators in priority order: em-dash ( — ), en-dash ( – ), colon (: ).
+    Splits at the *first* occurrence of the highest-priority separator found,
+    so 'Phoenix — 4 signals: Friday erosion, peak drop' correctly yields
+    subject='Phoenix' and detail='4 signals: Friday erosion, peak drop'.
+
+    Returns (text, "") when no separator is found so the caller can fall back
+    to a plain single-line TextBlock.
+    """
+    for sep in (" — ", " – ", ": "):
+        if sep in text:
+            idx = text.index(sep)
+            return text[:idx].strip(), text[idx + len(sep):].strip()
+    return text, ""

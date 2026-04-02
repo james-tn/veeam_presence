@@ -7,11 +7,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from cards.generate_samples import (
     briefing_data, office_data, leaderboard_data, person_data,
     comparison_offices, trending_data, visitors_data, who_was_in_data,
+    ghost_data_highlights, team_sync_highlights,
 )
 from cards.templates import (
     briefing_card, office_detail_card, leaderboard_card, person_card,
     comparison_card, trending_card, visitors_card, who_was_in_card,
-    welcome_card, overview_card, error_card,
+    welcome_card, overview_card, error_card, data_card,
 )
 
 cards = [
@@ -25,6 +26,14 @@ cards = [
     ("Trending Up", trending_card(trending_data)),
     ("Cross-Office Travel", visitors_card(visitors_data)),
     ("Who Was In — Seattle", who_was_in_card(who_was_in_data)),
+    ("Ghost Detection", data_card("Offices Showing Decay", ghost_data_highlights, [
+        ("Details on Phoenix", "Tell me about Phoenix"),
+        ("All offices", "Give me the daily briefing"),
+    ])),
+    ("Team Sync", data_card("Team Coordination", team_sync_highlights, [
+        ("Least coordinated teams", "Which teams are least coordinated?"),
+        ("All offices", "Give me the daily briefing"),
+    ])),
     ("Error State", error_card("Having trouble reaching the data warehouse. Usually resolves in a few minutes.")),
 ]
 
@@ -55,7 +64,7 @@ html = f"""<!DOCTYPE html>
 </head>
 <body>
     <h1>Veeam Presence</h1>
-    <p class="subtitle">Adaptive Card Preview — 11 templates as they appear in Microsoft Teams</p>
+    <p class="subtitle">Adaptive Card Preview — 13 templates as they appear in Microsoft Teams</p>
     <div id="cards"></div>
     <script>
     const allCards = [
