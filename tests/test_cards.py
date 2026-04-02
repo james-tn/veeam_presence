@@ -95,6 +95,9 @@ class TestCardTemplates:
         }
         card = trending_card(data)
         _valid_adaptive_card(card)
+        # Accent container header
+        assert card["body"][0]["type"] == "Container"
+        assert card["body"][0]["style"] == "Accent"
 
     def test_visitors_card(self):
         from cards.templates import visitors_card
@@ -108,6 +111,9 @@ class TestCardTemplates:
         }
         card = visitors_card(data)
         _valid_adaptive_card(card)
+        # Accent container header
+        assert card["body"][0]["type"] == "Container"
+        assert card["body"][0]["style"] == "Accent"
 
     def test_who_was_in_card(self):
         from cards.templates import who_was_in_card
@@ -121,6 +127,9 @@ class TestCardTemplates:
         }
         card = who_was_in_card(data)
         _valid_adaptive_card(card)
+        # Accent container header is the first body element
+        assert card["body"][0]["type"] == "Container"
+        assert card["body"][0]["style"] == "Accent"
 
     def test_welcome_card(self):
         from cards.templates import welcome_card
@@ -136,6 +145,101 @@ class TestCardTemplates:
         from cards.templates import error_card
         card = error_card("Something went wrong.")
         _valid_adaptive_card(card)
+
+    def test_data_card_plain_highlights(self):
+        from cards.templates import data_card
+        card = data_card("Ghost Offices", ["Phoenix — weak signal", "Baar — 2 signals: Friday erosion, peak drop"])
+        _valid_adaptive_card(card)
+        # Accent header
+        assert card["body"][0]["style"] == "Accent"
+
+    def test_data_card_structured_highlights(self):
+        """Highlights with 'Subject — detail' separator render as two-line entries."""
+        from cards.templates import data_card
+        card = data_card(
+            "Offices Showing Decay",
+            ["Phoenix — 4 signals: Friday erosion, peak drop, shape flattening, dwell compression",
+             "Baar — 2 signals: Friday erosion, peak ceiling drop"],
+        )
+        _valid_adaptive_card(card)
+        # The two highlights should generate Container elements (not plain TextBlocks)
+        containers = [b for b in card["body"][1:] if b.get("type") == "Container"]
+        assert len(containers) == 2
+
+    def test_data_card_fallback_highlights(self):
+        """Highlights without a separator render as plain TextBlocks."""
+        from cards.templates import data_card
+        card = data_card("Summary", ["Simple line without separator"])
+        _valid_adaptive_card(card)
+        text_blocks = [b for b in card["body"][1:] if b.get("type") == "TextBlock"]
+        assert len(text_blocks) == 1
+
+    def test_person_card_last_4_weeks(self):
+        """person_card renders last_4_weeks when provided."""
+        from cards.templates import person_card
+        data = {
+            "name": "Thomas Murphy",
+            "office": "Seattle",
+            "title": "Principal Engineer",
+            "days_per_week": 4.2,
+            "last_4_weeks": [5, 4, 5, 4],
+        }
+        card = person_card(data)
+        _valid_adaptive_card(card)
+        texts = [b.get("text", "") for b in card["body"] if b.get("type") == "TextBlock"]
+        assert any("Last 4 weeks" in t for t in texts)
+
+    def test_office_detail_card_with_health_score(self):
+        """office_detail_card shows health score in the Accent header when provided."""
+        from cards.templates import office_detail_card
+        data = {
+            "office": "Prague",
+            "people_in": 185,
+            "typical": 190,
+            "data_through": "2025-03-28",
+            "day": "Thu",
+            "health_score": 64,
+        }
+        card = office_detail_card(data)
+        _valid_adaptive_card(card)
+        # Header is Accent container
+        assert card["body"][0]["style"] == "Accent"
+        header_texts = [i.get("text", "") for i in card["body"][0]["items"]]
+        assert any("64" in t for t in header_texts)
+
+    def test_office_detail_card_with_typical_by_day(self):
+        """office_detail_card renders typical_by_day FactSet when provided."""
+        from cards.templates import office_detail_card
+        data = {
+            "office": "Prague",
+            "people_in": 185,
+            "typical": 190,
+            "data_through": "2025-03-28",
+            "day": "Thu",
+            "typical_by_day": {"Mon": 165, "Tue": 188, "Wed": 196, "Thu": 190, "Fri": 143},
+        }
+        card = office_detail_card(data)
+        _valid_adaptive_card(card)
+        fact_sets = [b for b in card["body"] if b.get("type") == "FactSet"]
+        assert len(fact_sets) >= 1
+
+    def test_action_buttons_have_value_field(self):
+        """All Action.Submit buttons carry a 'value' field for GitHub Copilot compatibility.
+        The 'value' must match the msteams imBack value so both platforms send the same message.
+        """
+        from cards.templates import briefing_card
+        data = {
+            "offices": [{"name": "Prague", "people_in": 185, "typical": 190, "avg": 198, "trend": "down"}],
+            "data_through": "2025-03-28",
+        }
+        card = briefing_card(data)
+        for action in card.get("actions", []):
+            action_data = action.get("data", {})
+            assert "value" in action_data, f"Action '{action['title']}' missing 'value' field"
+            assert action_data["value"] == action_data["msteams"]["value"], (
+                f"Action '{action['title']}': top-level value '{action_data['value']}' "
+                f"does not match msteams value '{action_data['msteams']['value']}'"
+            )
 
 
 class TestRenderer:

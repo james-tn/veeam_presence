@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from cards.templates import (
     briefing_card, office_detail_card, leaderboard_card, person_card,
     comparison_card, trending_card, visitors_card, who_was_in_card,
-    welcome_card, overview_card, error_card,
+    welcome_card, overview_card, error_card, data_card,
 )
 
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "output", "card_samples")
@@ -144,6 +144,21 @@ who_was_in_data = {
     ],
 }
 
+# --- 9. Ghost Detection (data_card) ---
+ghost_data_highlights = [
+    "Phoenix — 4 signals: Friday erosion, peak ceiling drop, shape flattening, dwell compression",
+    "Baar — 2 signals: Friday erosion, peak ceiling drop",
+    "Prague — 1 signal: Friday attendance down vs prior avg",
+]
+
+# --- 10. Team Sync (data_card) ---
+team_sync_highlights = [
+    "R&D Prague — 89% of team overlaps on Tuesdays and Wednesdays",
+    "Sales Atlanta — 62% overlap, best day is Thursday",
+    "G&A Seattle — 45% overlap, fragmented schedule",
+    "108 of 364 teams have < 30% member overlap on any single day",
+]
+
 
 # --- Generate all cards ---
 samples = {
@@ -155,9 +170,17 @@ samples = {
     "06_trending": trending_card(trending_data),
     "07_visitors": visitors_card(visitors_data),
     "08_who_was_in": who_was_in_card(who_was_in_data),
-    "09_welcome": welcome_card(),
-    "10_overview": overview_card(),
-    "11_error": error_card("Having trouble reaching the data warehouse. Usually resolves in a few minutes."),
+    "09_ghost": data_card("Offices Showing Decay", ghost_data_highlights, [
+        ("Details on Phoenix", "Tell me about Phoenix"),
+        ("All offices", "Give me the daily briefing"),
+    ]),
+    "10_team_sync": data_card("Team Coordination", team_sync_highlights, [
+        ("Which teams are least coordinated?", "Which teams are least coordinated?"),
+        ("All offices", "Give me the daily briefing"),
+    ]),
+    "11_welcome": welcome_card(),
+    "12_overview": overview_card(),
+    "13_error": error_card("Having trouble reaching the data warehouse. Usually resolves in a few minutes."),
 }
 
 for name, card in samples.items():
